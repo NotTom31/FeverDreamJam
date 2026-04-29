@@ -35,7 +35,25 @@ private:
 	FVector MoveInput;
 	void MoveForward(float Value);
 	void MoveRight(float Value);
+	void CheckGrounded();
+	void Jump();
+
+
+	bool isGrounded = false;
+	UPROPERTY(EditAnywhere)
+	float MoveSpeed = 600.0f;
+	
+	UPROPERTY(EditAnywhere)
+	float Acceleration = 3000.0f;
 
 	UPROPERTY(EditAnywhere)
-	float MoveSpeed = 100.0f;
+	float GroundFriction = 8.0f;
+
+	UPROPERTY(EditAnywhere)
+	float Gravity = -980.0f;
+
+	UPROPERTY(EditAnywhere)
+	float GroundCheckDistance = 100.0f;
+
+	
 };

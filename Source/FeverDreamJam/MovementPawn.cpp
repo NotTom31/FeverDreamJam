@@ -26,7 +26,6 @@ void AMovementPawn::BeginPlay()
 
 }
 
-
 void AMovementPawn::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
@@ -57,4 +56,25 @@ void AMovementPawn::MoveForward(float Value)
 void AMovementPawn::MoveRight(float Value)
 {
 	MoveInput.Y = Value;
+}
+
+void AMovementPawn::CheckGrounded()
+{
+	//FVector trace to check if the pawn is grounded, starts at the pawn location and goes down by GroundCheckDistance units, if it hits something the pawn is grounded 
+	//We currently draw this vector every tick, this seems expensive but unreal creates a bunch of traces per tick anyways so it doesn't seem to cause any performance issues
+	FVector Start = GetActorLocation();
+	FVector End = Start - FVector(0, 0, GroundCheckDistance);
+	FHitResult Hit;
+	FCollisionQueryParams Params;
+	Params.AddIgnoredActor(this);
+	// this line performs the line trace and sets isGrounded to true if it hits something, false otherwise
+	isGrounded = GetWorld()->LineTraceSingleByChannel(Hit, Start, End, ECC_Visibility, Params);
+}
+
+void AMovementPawn::Jump()
+{
+	if (isGrounded) {
+		//Add an impulse upwards to the mesh component, this will cause the pawn to jump
+		Mesh->AddImpulse(FVector(0, 0, 500.0f), NAME_None, true);
+	}
 }
