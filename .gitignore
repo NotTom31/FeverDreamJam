@@ -79,3 +79,7 @@ DerivedDataCache/*
 
 # SDK JSON files
 global.json
+.idea/.idea.FeverDreamJam/.idea/encodings.xml
+.idea/.idea.FeverDreamJam/.idea/indexLayout.xml
+.idea/.idea.FeverDreamJam/.idea/vcs.xml
+.idea/.idea.FeverDreamJam/.idea/.gitignore
