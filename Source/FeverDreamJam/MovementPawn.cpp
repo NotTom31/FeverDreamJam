@@ -7,7 +7,6 @@
 #include "EnhancedInputSubsystems.h"
 #include "InputMappingContext.h"
 #include "InputActionValue.h"
-#include "GameFramework/SpringArmComponent.h"
 #include "Camera/CameraComponent.h"
 #include "DrawDebugHelpers.h"
 
@@ -19,11 +18,23 @@ AMovementPawn::AMovementPawn()
 	PrimaryActorTick.bCanEverTick = true;
 	//Root component is the base of the actor, all other components will be attached to it
 	Root = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
+	Root->SetMobility(EComponentMobility::Movable);
 	SetRootComponent(Root);
 
 	//Mesh Component
 	Mesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Mesh"));
 	Mesh->SetupAttachment(Root);
+	Mesh->SetMobility(EComponentMobility::Movable);
+
+	//Camera Component
+	Camera = CreateDefaultSubobject<UCameraComponent>(TEXT("Camera"));
+	Camera->SetupAttachment(Root);
+	Camera->SetRelativeLocation(FVector(0, 0.0f, 64.0f));
+	Camera->bUsePawnControlRotation = true;
+
+	bUseControllerRotationYaw = true;
+	bUseControllerRotationPitch = true;
+	bUseControllerRotationRoll = false;
 
 	//give control of this pawn to player0 immediately, can be changed later in the editor or through code
 	AutoPossessPlayer = EAutoReceiveInput::Player0;
@@ -64,11 +75,29 @@ void AMovementPawn::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 	//GetClampedToMaxSize is used to prevent faster diagonal movement when both forward and right input are given
+	FVector DesiredDirection = MoveInput.GetClampedToMaxSize(1.0f);
+
 	if (!MoveInput.IsNearlyZero()) {
-		FVector Movement = MoveInput.GetClampedToMaxSize(1.0f) * MoveSpeed * DeltaTime;
-		AddActorWorldOffset(Movement, true);
+
+		Velocity += DesiredDirection * Acceleration * DeltaTime;
+		Velocity = Velocity.GetClampedToMaxSize(MaxSpeed);
+		
+		FVector HorizontalVelocity = FVector(Velocity.X, Velocity.Y, 0.0f);
+
+		Velocity.X = HorizontalVelocity.X;
+		Velocity.Y = HorizontalVelocity.Y;
 	}
+	else {
+		//Apply ground friction when no input is given, this will cause the pawn to come to a stop when the player lets go of the movement input
+		Velocity.X = FMath::FInterpTo(Velocity.X, 0.0f, DeltaTime, GroundFriction);
+		Velocity.Y = FMath::FInterpTo(Velocity.Y, 0.0f, DeltaTime, GroundFriction);
+	}
+	//movment vector done
+	FVector Movement = Velocity * DeltaTime;
+	//apply to actor
+	AddActorWorldOffset(Movement, true);
 	CheckGrounded();
+	ApplyGravity(DeltaTime);
 }
 
 // Called to bind functionality to input
@@ -81,13 +110,13 @@ void AMovementPawn::SetupPlayerInputComponent(UInputComponent* PlayerInputCompon
 		EIC->BindAction(MoveAction, ETriggerEvent::Completed, this, &AMovementPawn::Move);
 		EIC->BindAction(JumpAction, ETriggerEvent::Started, this, &AMovementPawn::Jump);
 		EIC->BindAction(JumpAction, ETriggerEvent::Completed, this, &AMovementPawn::StopJumping);
+		EIC->BindAction(LookAction, ETriggerEvent::Triggered, this, &AMovementPawn::Look);
 	}
-
 }
 
 void AMovementPawn::Move(const FInputActionValue& Value)
-{
-	FVector2D MovementVector = Value.Get<FVector2D>();
+{	
+	FVector2D Input = Value.Get<FVector2D>();
 	if (GEngine)
 	{
 		GEngine->AddOnScreenDebugMessage(
@@ -98,16 +127,23 @@ void AMovementPawn::Move(const FInputActionValue& Value)
 		);
 	}
 
-	MoveInput.X = MovementVector.Y; // W/S
-	MoveInput.Y = MovementVector.X; // A/D
+	if (!Controller) {
+		return;
+	}
+
+	FRotator ControlRotation = Controller->GetControlRotation();
+	FRotator YawRotation(0, ControlRotation.Yaw, 0);
+	FVector ForwardDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
+	FVector RightDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
+	MoveInput = ForwardDirection * Input.Y + RightDirection * Input.X;
 }
 
 void AMovementPawn::Look(const FInputActionValue& Value)
 {
 	FVector2D LookVector = Value.Get<FVector2D>();
 
-	AddControllerYawInput(LookVector.X);
-	AddControllerPitchInput(LookVector.Y);
+	AddControllerYawInput(LookVector.X * MouseSensitivity);
+	AddControllerPitchInput(LookVector.Y * MouseSensitivity);
 }
 
 void AMovementPawn::CheckGrounded()
@@ -121,7 +157,6 @@ void AMovementPawn::CheckGrounded()
 	Params.AddIgnoredActor(this);
 	// this line performs the line trace and sets isGrounded to true if it hits something, false otherwise
 	isGrounded = GetWorld()->LineTraceSingleByChannel(Hit, Start, End, ECC_Visibility, Params);
-
 	DrawDebugLine(
 		GetWorld(),
 		Start,
@@ -132,7 +167,16 @@ void AMovementPawn::CheckGrounded()
 		0,
 		2.0f
 	);
+}
 
+void AMovementPawn::ApplyGravity(float DeltaTime)
+{
+	if (!isGrounded) {
+		Velocity.Z += GetWorld()->GetGravityZ() * DeltaTime;
+	}
+	else if (Velocity.Z < 0) {
+		Velocity.Z = 0;
+	}
 }
 
 void AMovementPawn::Jump()
@@ -142,9 +186,8 @@ void AMovementPawn::Jump()
 		if (GEngine) {
 			GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, FString::Printf(TEXT("Grounded, Should be Jumping!")));
 		}
-		Mesh->AddImpulse(FVector(0, 0, 500.0f), NAME_None, true);
+		Velocity.Z = JumpStrength;
 	}
-
 }
 
 void AMovementPawn::StopJumping()
