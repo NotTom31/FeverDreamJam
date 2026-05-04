@@ -33,24 +33,28 @@ public:
 	void CheckGrounded();
 	void Jump();
 	void StopJumping();
+	void ApplyGravity(float DeltaTime);
+	
+	
+
 	bool isGrounded = false;
 	UPROPERTY(EditAnywhere)
-	float MoveSpeed = 600.0f;
+	FVector Velocity;
 
 	UPROPERTY(EditAnywhere)
-	float Acceleration = 3000.0f;
+	float Acceleration = 1500.0f;
 
 	UPROPERTY(EditAnywhere)
 	float GroundFriction = 8.0f;
 
 	UPROPERTY(EditAnywhere)
-	float Gravity = -980.0f;
+	float MaxSpeed = 600.0f;
+
+	UPROPERTY(EditAnywhere)
+	float JumpStrength = 600.0;
 
 	UPROPERTY(EditAnywhere)
 	float GroundCheckDistance = 150.0f;
-
-	UPROPERTY(VisibleAnywhere)
-	USpringArmComponent* SpringArm;
 
 	UPROPERTY(VisibleAnywhere)
 	UCameraComponent* Camera;
@@ -73,5 +77,14 @@ private:
 
 	UPROPERTY(EditAnywhere, Category = "Input")
 	UInputAction* JumpAction;
+
+	UPROPERTY(EditAnywhere, Category = "Input")
+	UInputAction* LookAction;
+
+	UPROPERTY(EditAnywhere, Category = "Input")
+	UInputAction* SprintAction;
+
+	UPROPERTY(EditAnywhere, Category = "Input")
+	UInputAction* CrouchAction;
 
 };
