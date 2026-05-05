@@ -31,11 +31,13 @@ public:
 	void Move(const FInputActionValue& Value);
 	void Look(const FInputActionValue& Value);
 	void CheckGrounded();
+	void CheckInteractable();
 	void Jump();
 	void StopJumping();
 	void ApplyGravity(float DeltaTime);
-	
-	
+	void Interact();
+	void StopInteract();
+
 
 	bool isGrounded = false;
 	UPROPERTY(EditAnywhere)
@@ -56,6 +58,9 @@ public:
 	UPROPERTY(EditAnywhere)
 	float GroundCheckDistance = 150.0f;
 
+	UPROPERTY(EditAnywhere)
+	float InteractableCheckDistance = 150.0f;
+	
 	UPROPERTY(VisibleAnywhere)
 	UCameraComponent* Camera;
 	UPROPERTY(EditAnywhere, Category = "Camera")
@@ -87,4 +92,6 @@ private:
 	UPROPERTY(EditAnywhere, Category = "Input")
 	UInputAction* CrouchAction;
 
+	UPROPERTY(EditAnywhere, Category = "Input")
+	UInputAction* InteractAction;
 };

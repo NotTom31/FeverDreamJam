@@ -111,6 +111,8 @@ void AMovementPawn::SetupPlayerInputComponent(UInputComponent* PlayerInputCompon
 		EIC->BindAction(JumpAction, ETriggerEvent::Started, this, &AMovementPawn::Jump);
 		EIC->BindAction(JumpAction, ETriggerEvent::Completed, this, &AMovementPawn::StopJumping);
 		EIC->BindAction(LookAction, ETriggerEvent::Triggered, this, &AMovementPawn::Look);
+		EIC->BindAction(InteractAction, ETriggerEvent::Started, this, &AMovementPawn::Interact);
+		EIC->BindAction(InteractAction, ETriggerEvent::Completed, this, &AMovementPawn::StopInteract);
 	}
 }
 
@@ -169,6 +171,52 @@ void AMovementPawn::CheckGrounded()
 	);
 }
 
+void AMovementPawn::CheckInteractable()
+{
+	if (!Camera) return;
+
+	FVector Start = Camera->GetComponentLocation();
+	FVector Forward = Camera->GetForwardVector();
+	FVector End = Start + (Forward * InteractableCheckDistance);
+
+	FHitResult Hit;
+	FCollisionQueryParams Params;
+	Params.AddIgnoredActor(this);
+
+	bool bHit = GetWorld()->LineTraceSingleByChannel(
+		Hit,
+		Start,
+		End,
+		ECC_Visibility,
+		Params
+	);
+
+	DrawDebugLine(
+		GetWorld(),
+		Start,
+		End,
+		bHit ? FColor::Green : FColor::Red,
+		false,
+		0.0f,
+		0,
+		2.0f
+	);
+
+	if (bHit)
+	{
+		// Debug what you hit
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(
+				-1,
+				5.f,
+				FColor::Yellow,
+				FString::Printf(TEXT("Hit: %s"), *Hit.GetActor()->GetName())
+			);
+		}
+	}
+}
+
 void AMovementPawn::ApplyGravity(float DeltaTime)
 {
 	if (!isGrounded) {
@@ -193,4 +241,18 @@ void AMovementPawn::Jump()
 void AMovementPawn::StopJumping()
 { 
 	//Currently does nothing, but could be used to implement variable jump height by reducing the upward velocity when the jump button is released
+}
+
+void AMovementPawn::Interact()
+{
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, FString::Printf(TEXT("Checking for interactable!")));
+	}
+	CheckInteractable();
+}
+
+void AMovementPawn::StopInteract()
+{
+	 
 }
