@@ -21,6 +21,8 @@ public:
 	AMovementPawn();
 
 protected:
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Collision")
+	class UCapsuleComponent* CapsuleCollider;
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
 
