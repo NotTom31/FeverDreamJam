@@ -83,7 +83,7 @@ void AMovementPawn::Tick(float DeltaTime)
 		Velocity = Velocity.GetClampedToMaxSize(MaxSpeed);
 		
 		FVector HorizontalVelocity = FVector(Velocity.X, Velocity.Y, 0.0f);
-
+		HorizontalVelocity = HorizontalVelocity.GetClampedToMaxSize(MaxSpeed);
 		Velocity.X = HorizontalVelocity.X;
 		Velocity.Y = HorizontalVelocity.Y;
 	}
@@ -113,6 +113,70 @@ void AMovementPawn::SetupPlayerInputComponent(UInputComponent* PlayerInputCompon
 		EIC->BindAction(LookAction, ETriggerEvent::Triggered, this, &AMovementPawn::Look);
 		EIC->BindAction(InteractAction, ETriggerEvent::Started, this, &AMovementPawn::Interact);
 		EIC->BindAction(InteractAction, ETriggerEvent::Completed, this, &AMovementPawn::StopInteract);
+		EIC->BindAction(SprintAction, ETriggerEvent::Started, this, &AMovementPawn::StartSprinting);
+		EIC->BindAction(SprintAction, ETriggerEvent::Completed, this, &AMovementPawn::StopSprinting);
+		EIC->BindAction(CrouchAction, ETriggerEvent::Started, this, &AMovementPawn::StartCrouching);
+		EIC->BindAction(CrouchAction, ETriggerEvent::Completed, this, &AMovementPawn::StopCrouching);
+	}
+}
+
+void AMovementPawn::StartSprinting()
+{
+
+	if(!isCrouching) {
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(
+				1,
+				0.f,
+				FColor::Green,
+				FString::Printf(TEXT("Should be sprinting!"))
+			);
+		}
+		isSprinting = true;
+		RefreshMovementState();
+	}
+}
+void AMovementPawn::StopSprinting()
+{
+	isSprinting = false;
+	RefreshMovementState();
+}
+
+void AMovementPawn::StartCrouching()
+{
+
+	if (!isSprinting) {
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(
+				1,
+				0.f,
+				FColor::Green,
+				FString::Printf(TEXT("Should be sprinting!"))
+			);
+		}
+		isCrouching = true;
+		RefreshMovementState();
+	}
+}
+
+void AMovementPawn::StopCrouching()
+{
+		isCrouching = false;
+		RefreshMovementState();
+}
+
+void AMovementPawn::RefreshMovementState() {
+	
+	if (isCrouching) {
+		MaxSpeed = CrouchSpeed;
+	}
+	else if (isSprinting) {
+		MaxSpeed = SprintSpeed;
+	}
+	else {
+		MaxSpeed = WalkSpeed;
 	}
 }
 
@@ -123,7 +187,7 @@ void AMovementPawn::Move(const FInputActionValue& Value)
 	{
 		GEngine->AddOnScreenDebugMessage(
 			1,
-			0.f,
+			0.f,	
 			FColor::Green,
 			Value.ToString()
 		);

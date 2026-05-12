@@ -37,11 +37,26 @@ public:
 	void ApplyGravity(float DeltaTime);
 	void Interact();
 	void StopInteract();
+	void StartSprinting();
+	void StopSprinting();
+	void StartCrouching();
+	void StopCrouching();
+	void RefreshMovementState();
 
-
+	bool isSprinting = false;
+	bool isCrouching = false;
 	bool isGrounded = false;
+
+	float CurrentSpeed = 0.0f;
 	UPROPERTY(EditAnywhere)
 	FVector Velocity;
+	UPROPERTY(EditAnywhere)
+	float WalkSpeed = 450.0f;
+	UPROPERTY(EditAnywhere)
+	float SprintSpeed = 1000.0f;
+	
+	UPROPERTY(EditAnywhere)
+	float CrouchSpeed = 200.0f;
 
 	UPROPERTY(EditAnywhere)
 	float Acceleration = 1500.0f;
