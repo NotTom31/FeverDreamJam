@@ -9,26 +9,28 @@
 #include "InputActionValue.h"
 #include "Camera/CameraComponent.h"
 #include "DrawDebugHelpers.h"
-
-
+#include "Components/CapsuleComponent.h"
 
 // Sets default values
 AMovementPawn::AMovementPawn()
 {
 	PrimaryActorTick.bCanEverTick = true;
 	//Root component is the base of the actor, all other components will be attached to it
-	Root = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
-	Root->SetMobility(EComponentMobility::Movable);
-	SetRootComponent(Root);
+	CapsuleCollider = CreateDefaultSubobject<UCapsuleComponent>(TEXT("CapsuleCollider"));
+	CapsuleCollider->InitCapsuleSize(40.f, 90.f);
+	CapsuleCollider->SetCollisionProfileName(TEXT("Pawn"));
+	CapsuleCollider->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+
+	SetRootComponent(CapsuleCollider);
 
 	//Mesh Component
 	Mesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Mesh"));
-	Mesh->SetupAttachment(Root);
+	Mesh->SetupAttachment(CapsuleCollider);
 	Mesh->SetMobility(EComponentMobility::Movable);
 
 	//Camera Component
 	Camera = CreateDefaultSubobject<UCameraComponent>(TEXT("Camera"));
-	Camera->SetupAttachment(Root);
+	Camera->SetupAttachment(CapsuleCollider);
 	Camera->SetRelativeLocation(FVector(0, 0.0f, 64.0f));
 	Camera->bUsePawnControlRotation = true;
 
