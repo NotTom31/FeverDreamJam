@@ -44,6 +44,7 @@ public:
 	void StartCrouching();
 	void StopCrouching();
 	void RefreshMovementState();
+	void MoveWithCollisions(const FVector& Movement);
 
 	bool isSprinting = false;
 	bool isCrouching = false;
