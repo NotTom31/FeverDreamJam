@@ -73,6 +73,7 @@ void AMovementPawn::BeginPlay()
 	}
 }
 
+
 void AMovementPawn::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
@@ -94,6 +95,19 @@ void AMovementPawn::Tick(float DeltaTime)
 		Velocity.X = FMath::FInterpTo(Velocity.X, 0.0f, DeltaTime, GroundFriction);
 		Velocity.Y = FMath::FInterpTo(Velocity.Y, 0.0f, DeltaTime, GroundFriction);
 	}
+	
+	float TargetHalfHeight = isCrouching ? CrouchCapsuleHalfHeight : StandingCapsuleHalfHeight;
+	float NewHalfHeight = FMath::FInterpTo(
+		CapsuleCollider->GetUnscaledCapsuleHalfHeight(), 
+		TargetHalfHeight, 
+		DeltaTime, 
+		CrouchInterpSpeed);
+	CapsuleCollider->SetCapsuleHalfHeight(NewHalfHeight, true);
+
+	float TargetCameraHeight = isCrouching ? CrouchingCameraHeight : StandingCameraHeight;
+	FVector CameraLocation = Camera->GetRelativeLocation();
+	CameraLocation.Z = FMath::FInterpTo(CameraLocation.Z, TargetCameraHeight, DeltaTime, CrouchInterpSpeed);
+	Camera->SetRelativeLocation(CameraLocation);
 	CheckGrounded();
 	ApplyGravity(DeltaTime);
 	FVector Movement = Velocity * DeltaTime;
@@ -122,40 +136,42 @@ void AMovementPawn::SetupPlayerInputComponent(UInputComponent* PlayerInputCompon
 
 void AMovementPawn::StartSprinting()
 {
-
 	if(!isCrouching) {
-		if (GEngine)
-		{
-			GEngine->AddOnScreenDebugMessage(
-				1,
-				0.f,
-				FColor::Green,
-				FString::Printf(TEXT("Should be sprinting!"))
-			);
-		}
 		isSprinting = true;
 		RefreshMovementState();
 	}
 }
+
 void AMovementPawn::StopSprinting()
 {
 	isSprinting = false;
 	RefreshMovementState();
 }
 
+bool AMovementPawn::CanStandUp() const {
+	FVector Start = GetActorLocation();
+	FVector End = Start + FVector(0, 0, StandingCapsuleHalfHeight - CrouchCapsuleHalfHeight);
+	FCollisionShape StandingCapsule = FCollisionShape::MakeCapsule(
+		CapsuleCollider->GetScaledCapsuleRadius(),
+		StandingCapsuleHalfHeight
+	);
+	FCollisionQueryParams Params;
+	Params.AddIgnoredActor(this);
+	// If the line trace hits something, we can't stand up
+	return !GetWorld()->SweepTestByChannel(
+		Start,
+		End,
+		FQuat::Identity,
+		ECC_Pawn,
+		StandingCapsule,
+		Params
+	);
+}
+
+
 void AMovementPawn::StartCrouching()
 {
-
 	if (!isSprinting) {
-		if (GEngine)
-		{
-			GEngine->AddOnScreenDebugMessage(
-				1,
-				0.f,
-				FColor::Green,
-				FString::Printf(TEXT("Should be sprinting!"))
-			);
-		}
 		isCrouching = true;
 		RefreshMovementState();
 	}
@@ -163,8 +179,12 @@ void AMovementPawn::StartCrouching()
 
 void AMovementPawn::StopCrouching()
 {
-		isCrouching = false;
-		RefreshMovementState();
+	if (!CanStandUp()) {
+		return;
+	}
+
+	isCrouching = false;
+	RefreshMovementState();
 }
 
 void AMovementPawn::RefreshMovementState() {
@@ -203,6 +223,7 @@ void AMovementPawn::Move(const FInputActionValue& Value)
 	FVector RightDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
 	MoveInput = ForwardDirection * Input.Y + RightDirection * Input.X;
 }
+
 
 void AMovementPawn::MoveWithCollisions(const FVector& DesiredMovement)
 {

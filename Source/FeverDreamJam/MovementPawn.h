@@ -33,7 +33,7 @@ public:
 	void Move(const FInputActionValue& Value);
 	void Look(const FInputActionValue& Value);
 	void CheckGrounded();
-	void CheckInteractable();
+	void CheckInteractable();	
 	void Jump();
 	void StopJumping();
 	void ApplyGravity(float DeltaTime);
@@ -45,6 +45,8 @@ public:
 	void StopCrouching();
 	void RefreshMovementState();
 	void MoveWithCollisions(const FVector& Movement);
+	void AdjustCapsuleHeight(float TargetHeight, float DeltaTime);
+	bool CanStandUp() const;
 
 	bool isSprinting = false;
 	bool isCrouching = false;
@@ -88,8 +90,21 @@ public:
 	UStaticMeshComponent* Mesh;
 	UPROPERTY(VisibleAnywhere)
 	FVector MoveInput;
-	// Called to bind functionality to input
+	//Crouching stats
+	UPROPERTY(EditAnywhere, Category = "Crouch")
+	float StandingCapsuleHalfHeight = 90.0f;
 
+	UPROPERTY(EditAnywhere, Category = "Crouch")
+	float CrouchCapsuleHalfHeight = 45.0f;
+
+	UPROPERTY(EditAnywhere, Category = "Crouch")
+	float StandingCameraHeight = 64.0f;
+
+	UPROPERTY(EditAnywhere, Category = "Crouch")
+	float CrouchingCameraHeight = 32.0f;
+
+	UPROPERTY(EditAnywhere, Category = "Crouch")
+	float CrouchInterpSpeed = 10.0f;
 
 private:
 	UPROPERTY(EditAnywhere, Category = "Input")
