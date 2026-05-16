@@ -94,12 +94,10 @@ void AMovementPawn::Tick(float DeltaTime)
 		Velocity.X = FMath::FInterpTo(Velocity.X, 0.0f, DeltaTime, GroundFriction);
 		Velocity.Y = FMath::FInterpTo(Velocity.Y, 0.0f, DeltaTime, GroundFriction);
 	}
-	//movment vector done
-	FVector Movement = Velocity * DeltaTime;
-	//apply to actor
-	AddActorWorldOffset(Movement, true);
 	CheckGrounded();
 	ApplyGravity(DeltaTime);
+	FVector Movement = Velocity * DeltaTime;
+	MoveWithCollisions(Movement);
 }
 
 // Called to bind functionality to input
@@ -206,6 +204,70 @@ void AMovementPawn::Move(const FInputActionValue& Value)
 	MoveInput = ForwardDirection * Input.Y + RightDirection * Input.X;
 }
 
+void AMovementPawn::MoveWithCollisions(const FVector& DesiredMovement)
+{
+	if (!CapsuleCollider || DesiredMovement.IsNearlyZero()) {
+		return;
+	}
+
+	FVector RemainingMovement = DesiredMovement;
+	const int32 MaxIterations = 5;
+
+	for (int i = 0; i < MaxIterations; i++)
+	{
+		if (RemainingMovement.IsNearlyZero()) {
+			break;
+		}
+		
+		FVector Start = GetActorLocation();
+		FVector End = Start + RemainingMovement;
+
+		FHitResult Hit;
+		float CapsuleRadius = CapsuleCollider->GetScaledCapsuleRadius();
+		float CapsuleHalfHeight = CapsuleCollider->GetScaledCapsuleHalfHeight();
+
+		FCollisionShape CapsuleShape = FCollisionShape::MakeCapsule(CapsuleRadius, CapsuleHalfHeight);
+
+		FCollisionShape CapsuleShape2D = FCollisionShape::MakeCapsule(
+			CapsuleRadius, 
+			CapsuleHalfHeight
+		);
+		FCollisionQueryParams Params;
+		Params.AddIgnoredActor(this);
+
+		bool bHit = GetWorld()->SweepSingleByChannel(
+			Hit,
+			Start,
+			End,
+			FQuat::Identity,
+			ECC_Pawn,
+			CapsuleShape,
+			Params
+		);
+
+		if (!bHit) {
+			SetActorLocation(End);
+			break;
+		}
+
+		//Move only up to the safe part before impact
+		FVector SafeMove = RemainingMovement * Hit.Time;
+		SetActorLocation(Start + SafeMove);
+
+
+		//Push slightlyaway from the surface to prevent sticking like velcro
+		FVector Depenteration = Hit.Normal * 1.0f;
+		AddActorWorldOffset(Depenteration, false);
+		FVector UsedMovement = SafeMove;
+		FVector LeftoverMovement = RemainingMovement - UsedMovement;
+
+		RemainingMovement = FVector::VectorPlaneProject(LeftoverMovement, Hit.Normal);
+		Velocity = FVector::VectorPlaneProject(Velocity, Hit.Normal);
+
+		RemainingMovement *= 0.9f; // reduce remaining movement to prevent getting stuck in corners
+	}
+}
+
 void AMovementPawn::Look(const FInputActionValue& Value)
 {
 	FVector2D LookVector = Value.Get<FVector2D>();
@@ -296,10 +358,6 @@ void AMovementPawn::ApplyGravity(float DeltaTime)
 void AMovementPawn::Jump()
 {
 	if (isGrounded) {
-		//Add an impulse upwards to the mesh component, this will cause the pawn to jump
-		if (GEngine) {
-			GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, FString::Printf(TEXT("Grounded, Should be Jumping!")));
-		}
 		Velocity.Z = JumpStrength;
 	}
 }
