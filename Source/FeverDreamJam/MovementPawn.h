@@ -46,11 +46,13 @@ public:
 	void RefreshMovementState();
 	void MoveWithCollisions(const FVector& Movement);
 	void AdjustCapsuleHeight(float TargetHeight, float DeltaTime);
+	void SnapToGround();
 	bool CanStandUp() const;
 
 	bool isSprinting = false;
 	bool isCrouching = false;
 	bool isGrounded = false;
+	FVector GroundNormal;
 
 	float CurrentSpeed = 0.0f;
 	UPROPERTY(EditAnywhere)
@@ -105,6 +107,12 @@ public:
 
 	UPROPERTY(EditAnywhere, Category = "Crouch")
 	float CrouchInterpSpeed = 10.0f;
+
+	UPROPERTY(EditAnywhere, Category = "Slope")
+	float MaxWalkableSlopeAngle = 45.0f;
+
+	UPROPERTY(EditAnywhere, Category = "Slope")
+	float GroundSnapDistance = 20.0f;
 
 private:
 	UPROPERTY(EditAnywhere, Category = "Input")

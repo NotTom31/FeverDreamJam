@@ -17,7 +17,7 @@ AMovementPawn::AMovementPawn()
 	PrimaryActorTick.bCanEverTick = true;
 	//Root component is the base of the actor, all other components will be attached to it
 	CapsuleCollider = CreateDefaultSubobject<UCapsuleComponent>(TEXT("CapsuleCollider"));
-	CapsuleCollider->InitCapsuleSize(40.f, 90.f);
+	CapsuleCollider->InitCapsuleSize(45.f, 90.f);
 	CapsuleCollider->SetCollisionProfileName(TEXT("Pawn"));
 	CapsuleCollider->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 
@@ -77,13 +77,24 @@ void AMovementPawn::BeginPlay()
 void AMovementPawn::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+	CheckGrounded();
 	//GetClampedToMaxSize is used to prevent faster diagonal movement when both forward and right input are given
 	FVector DesiredDirection = MoveInput.GetClampedToMaxSize(1.0f);
+	DesiredDirection.Z = 0.0f;
+	if (!DesiredDirection.IsNearlyZero()) {
+		DesiredDirection.Normalize();
+		Velocity += DesiredDirection * Acceleration * DeltaTime;
+
+		FVector HorizontalVelocity = FVector(Velocity.X, Velocity.Y, 0.0f);
+		HorizontalVelocity = HorizontalVelocity.GetClampedToMaxSize(MaxSpeed);
+
+		Velocity.X = HorizontalVelocity.X;
+		Velocity.Y = HorizontalVelocity.Y;
+	}
 
 	if (!MoveInput.IsNearlyZero()) {
 
 		Velocity += DesiredDirection * Acceleration * DeltaTime;
-		Velocity = Velocity.GetClampedToMaxSize(MaxSpeed);
 		
 		FVector HorizontalVelocity = FVector(Velocity.X, Velocity.Y, 0.0f);
 		HorizontalVelocity = HorizontalVelocity.GetClampedToMaxSize(MaxSpeed);
@@ -104,14 +115,15 @@ void AMovementPawn::Tick(float DeltaTime)
 		CrouchInterpSpeed);
 	CapsuleCollider->SetCapsuleHalfHeight(NewHalfHeight, true);
 
+
 	float TargetCameraHeight = isCrouching ? CrouchingCameraHeight : StandingCameraHeight;
 	FVector CameraLocation = Camera->GetRelativeLocation();
 	CameraLocation.Z = FMath::FInterpTo(CameraLocation.Z, TargetCameraHeight, DeltaTime, CrouchInterpSpeed);
 	Camera->SetRelativeLocation(CameraLocation);
-	CheckGrounded();
 	ApplyGravity(DeltaTime);
 	FVector Movement = Velocity * DeltaTime;
 	MoveWithCollisions(Movement);
+	SnapToGround();
 }
 
 // Called to bind functionality to input
@@ -308,17 +320,19 @@ void AMovementPawn::CheckGrounded()
 	Params.AddIgnoredActor(this);
 	// this line performs the line trace and sets isGrounded to true if it hits something, false otherwise
 	isGrounded = GetWorld()->LineTraceSingleByChannel(Hit, Start, End, ECC_Visibility, Params);
-	DrawDebugLine(
-		GetWorld(),
-		Start,
-		End,
-		isGrounded ? FColor::Green : FColor::Red,
-		false,
-		0.0f,
-		0,
-		2.0f
-	);
+	if (isGrounded) {
+		GroundNormal = Hit.ImpactNormal;
+		float SlopeAngle = FMath::RadiansToDegrees(FMath::Acos(FVector::DotProduct(GroundNormal, FVector::UpVector)));
+
+		if (SlopeAngle > MaxWalkableSlopeAngle) {
+			isGrounded = false;
+		}
+	}
+	else {
+		GroundNormal = FVector::UpVector;
+	}
 }
+
 
 void AMovementPawn::CheckInteractable()
 {
@@ -336,7 +350,7 @@ void AMovementPawn::CheckInteractable()
 		Hit,
 		Start,
 		End,
-		ECC_Visibility,
+		ECC_Pawn,
 		Params
 	);
 
@@ -371,8 +385,9 @@ void AMovementPawn::ApplyGravity(float DeltaTime)
 	if (!isGrounded) {
 		Velocity.Z += GetWorld()->GetGravityZ() * DeltaTime;
 	}
-	else if (Velocity.Z < 0) {
-		Velocity.Z = 0;
+	else if (Velocity.Z < 0.0f)
+	{
+		Velocity.Z = 0.0f;
 	}
 }
 
@@ -380,6 +395,7 @@ void AMovementPawn::Jump()
 {
 	if (isGrounded) {
 		Velocity.Z = JumpStrength;
+		isGrounded = false;
 	}
 }
 
@@ -400,4 +416,21 @@ void AMovementPawn::Interact()
 void AMovementPawn::StopInteract()
 {
 	 
+}
+
+void AMovementPawn::SnapToGround()
+{
+	if (!isGrounded || Velocity.Z > 0.0f) {
+		return;
+	}
+	FVector Start = GetActorLocation();
+	FVector End = Start - FVector(0, 0, GroundSnapDistance);
+
+	FHitResult Hit;
+	FCollisionQueryParams Params;
+	Params.AddIgnoredActor(this);
+	bool bHit = GetWorld()->LineTraceSingleByChannel(Hit, Start, End, ECC_Visibility, Params);
+	if (bHit) {
+		SetActorLocation(Hit.ImpactPoint + FVector(0, 0, CapsuleCollider->GetScaledCapsuleHalfHeight()));
+	}
 }
