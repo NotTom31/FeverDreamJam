@@ -9,26 +9,28 @@
 #include "InputActionValue.h"
 #include "Camera/CameraComponent.h"
 #include "DrawDebugHelpers.h"
-
-
+#include "Components/CapsuleComponent.h"
 
 // Sets default values
 AMovementPawn::AMovementPawn()
 {
 	PrimaryActorTick.bCanEverTick = true;
 	//Root component is the base of the actor, all other components will be attached to it
-	Root = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
-	Root->SetMobility(EComponentMobility::Movable);
-	SetRootComponent(Root);
+	CapsuleCollider = CreateDefaultSubobject<UCapsuleComponent>(TEXT("CapsuleCollider"));
+	CapsuleCollider->InitCapsuleSize(40.f, 90.f);
+	CapsuleCollider->SetCollisionProfileName(TEXT("Pawn"));
+	CapsuleCollider->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+
+	SetRootComponent(CapsuleCollider);
 
 	//Mesh Component
 	Mesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Mesh"));
-	Mesh->SetupAttachment(Root);
+	Mesh->SetupAttachment(CapsuleCollider);
 	Mesh->SetMobility(EComponentMobility::Movable);
 
 	//Camera Component
 	Camera = CreateDefaultSubobject<UCameraComponent>(TEXT("Camera"));
-	Camera->SetupAttachment(Root);
+	Camera->SetupAttachment(CapsuleCollider);
 	Camera->SetRelativeLocation(FVector(0, 0.0f, 64.0f));
 	Camera->bUsePawnControlRotation = true;
 
@@ -83,7 +85,7 @@ void AMovementPawn::Tick(float DeltaTime)
 		Velocity = Velocity.GetClampedToMaxSize(MaxSpeed);
 		
 		FVector HorizontalVelocity = FVector(Velocity.X, Velocity.Y, 0.0f);
-
+		HorizontalVelocity = HorizontalVelocity.GetClampedToMaxSize(MaxSpeed);
 		Velocity.X = HorizontalVelocity.X;
 		Velocity.Y = HorizontalVelocity.Y;
 	}
@@ -92,12 +94,10 @@ void AMovementPawn::Tick(float DeltaTime)
 		Velocity.X = FMath::FInterpTo(Velocity.X, 0.0f, DeltaTime, GroundFriction);
 		Velocity.Y = FMath::FInterpTo(Velocity.Y, 0.0f, DeltaTime, GroundFriction);
 	}
-	//movment vector done
-	FVector Movement = Velocity * DeltaTime;
-	//apply to actor
-	AddActorWorldOffset(Movement, true);
 	CheckGrounded();
 	ApplyGravity(DeltaTime);
+	FVector Movement = Velocity * DeltaTime;
+	MoveWithCollisions(Movement);
 }
 
 // Called to bind functionality to input
@@ -111,6 +111,72 @@ void AMovementPawn::SetupPlayerInputComponent(UInputComponent* PlayerInputCompon
 		EIC->BindAction(JumpAction, ETriggerEvent::Started, this, &AMovementPawn::Jump);
 		EIC->BindAction(JumpAction, ETriggerEvent::Completed, this, &AMovementPawn::StopJumping);
 		EIC->BindAction(LookAction, ETriggerEvent::Triggered, this, &AMovementPawn::Look);
+		EIC->BindAction(InteractAction, ETriggerEvent::Started, this, &AMovementPawn::Interact);
+		EIC->BindAction(InteractAction, ETriggerEvent::Completed, this, &AMovementPawn::StopInteract);
+		EIC->BindAction(SprintAction, ETriggerEvent::Started, this, &AMovementPawn::StartSprinting);
+		EIC->BindAction(SprintAction, ETriggerEvent::Completed, this, &AMovementPawn::StopSprinting);
+		EIC->BindAction(CrouchAction, ETriggerEvent::Started, this, &AMovementPawn::StartCrouching);
+		EIC->BindAction(CrouchAction, ETriggerEvent::Completed, this, &AMovementPawn::StopCrouching);
+	}
+}
+
+void AMovementPawn::StartSprinting()
+{
+
+	if(!isCrouching) {
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(
+				1,
+				0.f,
+				FColor::Green,
+				FString::Printf(TEXT("Should be sprinting!"))
+			);
+		}
+		isSprinting = true;
+		RefreshMovementState();
+	}
+}
+void AMovementPawn::StopSprinting()
+{
+	isSprinting = false;
+	RefreshMovementState();
+}
+
+void AMovementPawn::StartCrouching()
+{
+
+	if (!isSprinting) {
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(
+				1,
+				0.f,
+				FColor::Green,
+				FString::Printf(TEXT("Should be sprinting!"))
+			);
+		}
+		isCrouching = true;
+		RefreshMovementState();
+	}
+}
+
+void AMovementPawn::StopCrouching()
+{
+		isCrouching = false;
+		RefreshMovementState();
+}
+
+void AMovementPawn::RefreshMovementState() {
+	
+	if (isCrouching) {
+		MaxSpeed = CrouchSpeed;
+	}
+	else if (isSprinting) {
+		MaxSpeed = SprintSpeed;
+	}
+	else {
+		MaxSpeed = WalkSpeed;
 	}
 }
 
@@ -121,7 +187,7 @@ void AMovementPawn::Move(const FInputActionValue& Value)
 	{
 		GEngine->AddOnScreenDebugMessage(
 			1,
-			0.f,
+			0.f,	
 			FColor::Green,
 			Value.ToString()
 		);
@@ -136,6 +202,70 @@ void AMovementPawn::Move(const FInputActionValue& Value)
 	FVector ForwardDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
 	FVector RightDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
 	MoveInput = ForwardDirection * Input.Y + RightDirection * Input.X;
+}
+
+void AMovementPawn::MoveWithCollisions(const FVector& DesiredMovement)
+{
+	if (!CapsuleCollider || DesiredMovement.IsNearlyZero()) {
+		return;
+	}
+
+	FVector RemainingMovement = DesiredMovement;
+	const int32 MaxIterations = 5;
+
+	for (int i = 0; i < MaxIterations; i++)
+	{
+		if (RemainingMovement.IsNearlyZero()) {
+			break;
+		}
+		
+		FVector Start = GetActorLocation();
+		FVector End = Start + RemainingMovement;
+
+		FHitResult Hit;
+		float CapsuleRadius = CapsuleCollider->GetScaledCapsuleRadius();
+		float CapsuleHalfHeight = CapsuleCollider->GetScaledCapsuleHalfHeight();
+
+		FCollisionShape CapsuleShape = FCollisionShape::MakeCapsule(CapsuleRadius, CapsuleHalfHeight);
+
+		FCollisionShape CapsuleShape2D = FCollisionShape::MakeCapsule(
+			CapsuleRadius, 
+			CapsuleHalfHeight
+		);
+		FCollisionQueryParams Params;
+		Params.AddIgnoredActor(this);
+
+		bool bHit = GetWorld()->SweepSingleByChannel(
+			Hit,
+			Start,
+			End,
+			FQuat::Identity,
+			ECC_Pawn,
+			CapsuleShape,
+			Params
+		);
+
+		if (!bHit) {
+			SetActorLocation(End);
+			break;
+		}
+
+		//Move only up to the safe part before impact
+		FVector SafeMove = RemainingMovement * Hit.Time;
+		SetActorLocation(Start + SafeMove);
+
+
+		//Push slightlyaway from the surface to prevent sticking like velcro
+		FVector Depenteration = Hit.Normal * 1.0f;
+		AddActorWorldOffset(Depenteration, false);
+		FVector UsedMovement = SafeMove;
+		FVector LeftoverMovement = RemainingMovement - UsedMovement;
+
+		RemainingMovement = FVector::VectorPlaneProject(LeftoverMovement, Hit.Normal);
+		Velocity = FVector::VectorPlaneProject(Velocity, Hit.Normal);
+
+		RemainingMovement *= 0.9f; // reduce remaining movement to prevent getting stuck in corners
+	}
 }
 
 void AMovementPawn::Look(const FInputActionValue& Value)
@@ -169,6 +299,52 @@ void AMovementPawn::CheckGrounded()
 	);
 }
 
+void AMovementPawn::CheckInteractable()
+{
+	if (!Camera) return;
+
+	FVector Start = Camera->GetComponentLocation();
+	FVector Forward = Camera->GetForwardVector();
+	FVector End = Start + (Forward * InteractableCheckDistance);
+
+	FHitResult Hit;
+	FCollisionQueryParams Params;
+	Params.AddIgnoredActor(this);
+
+	bool bHit = GetWorld()->LineTraceSingleByChannel(
+		Hit,
+		Start,
+		End,
+		ECC_Visibility,
+		Params
+	);
+
+	DrawDebugLine(
+		GetWorld(),
+		Start,
+		End,
+		bHit ? FColor::Green : FColor::Red,
+		false,
+		0.0f,
+		0,
+		2.0f
+	);
+
+	if (bHit)
+	{
+		// Debug what you hit
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(
+				-1,
+				5.f,
+				FColor::Yellow,
+				FString::Printf(TEXT("Hit: %s"), *Hit.GetActor()->GetName())
+			);
+		}
+	}
+}
+
 void AMovementPawn::ApplyGravity(float DeltaTime)
 {
 	if (!isGrounded) {
@@ -182,10 +358,6 @@ void AMovementPawn::ApplyGravity(float DeltaTime)
 void AMovementPawn::Jump()
 {
 	if (isGrounded) {
-		//Add an impulse upwards to the mesh component, this will cause the pawn to jump
-		if (GEngine) {
-			GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, FString::Printf(TEXT("Grounded, Should be Jumping!")));
-		}
 		Velocity.Z = JumpStrength;
 	}
 }
@@ -193,4 +365,18 @@ void AMovementPawn::Jump()
 void AMovementPawn::StopJumping()
 { 
 	//Currently does nothing, but could be used to implement variable jump height by reducing the upward velocity when the jump button is released
+}
+
+void AMovementPawn::Interact()
+{
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, FString::Printf(TEXT("Checking for interactable!")));
+	}
+	CheckInteractable();
+}
+
+void AMovementPawn::StopInteract()
+{
+	 
 }

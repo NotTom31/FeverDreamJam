@@ -21,6 +21,8 @@ public:
 	AMovementPawn();
 
 protected:
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Collision")
+	class UCapsuleComponent* CapsuleCollider;
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
 
@@ -31,15 +33,33 @@ public:
 	void Move(const FInputActionValue& Value);
 	void Look(const FInputActionValue& Value);
 	void CheckGrounded();
+	void CheckInteractable();
 	void Jump();
 	void StopJumping();
 	void ApplyGravity(float DeltaTime);
-	
-	
+	void Interact();
+	void StopInteract();
+	void StartSprinting();
+	void StopSprinting();
+	void StartCrouching();
+	void StopCrouching();
+	void RefreshMovementState();
+	void MoveWithCollisions(const FVector& Movement);
 
+	bool isSprinting = false;
+	bool isCrouching = false;
 	bool isGrounded = false;
+
+	float CurrentSpeed = 0.0f;
 	UPROPERTY(EditAnywhere)
 	FVector Velocity;
+	UPROPERTY(EditAnywhere)
+	float WalkSpeed = 450.0f;
+	UPROPERTY(EditAnywhere)
+	float SprintSpeed = 1000.0f;
+	
+	UPROPERTY(EditAnywhere)
+	float CrouchSpeed = 200.0f;
 
 	UPROPERTY(EditAnywhere)
 	float Acceleration = 1500.0f;
@@ -56,6 +76,9 @@ public:
 	UPROPERTY(EditAnywhere)
 	float GroundCheckDistance = 150.0f;
 
+	UPROPERTY(EditAnywhere)
+	float InteractableCheckDistance = 150.0f;
+	
 	UPROPERTY(VisibleAnywhere)
 	UCameraComponent* Camera;
 	UPROPERTY(EditAnywhere, Category = "Camera")
@@ -87,4 +110,6 @@ private:
 	UPROPERTY(EditAnywhere, Category = "Input")
 	UInputAction* CrouchAction;
 
+	UPROPERTY(EditAnywhere, Category = "Input")
+	UInputAction* InteractAction;
 };
