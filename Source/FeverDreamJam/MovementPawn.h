@@ -47,11 +47,13 @@ public:
 	void MoveWithCollisions(const FVector& Movement);
 	void AdjustCapsuleHeight(float TargetHeight, float DeltaTime);
 	void SnapToGround();
+	void RestoreStamina();
 	bool CanStandUp() const;
 
 	bool isSprinting = false;
 	bool isCrouching = false;
 	bool isGrounded = false;
+	bool isClimbing = false;
 	FVector GroundNormal;
 
 	float CurrentSpeed = 0.0f;
@@ -113,6 +115,15 @@ public:
 
 	UPROPERTY(EditAnywhere, Category = "Slope")
 	float GroundSnapDistance = 20.0f;
+
+	UPROPERTY(EditAnywhere, Category = "Climb")
+	float ClimbSpeed = 300.0f;
+	UPROPERTY(EditAnywhere, Category = "Climb")
+	float MaxStamina = 5.0f;
+	float CurrentStamina = MaxStamina;
+	UPROPERTY(EditAnywhere, Category = "Climb")
+	float StaminaDrainRate = 1.0f;
+	FVector ClimbWallNormal;
 
 private:
 	UPROPERTY(EditAnywhere, Category = "Input")

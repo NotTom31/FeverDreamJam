@@ -78,6 +78,22 @@ void AMovementPawn::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 	CheckGrounded();
+	if (isClimbing) {
+		CurrentStamina -= StaminaDrainRate * DeltaTime;
+		if (CurrentStamina <= 0.0f) {
+			isClimbing = false;
+			RefreshMovementState();
+			return;
+		}
+		AddActorWorldOffset(-ClimbWallNormal * 2.0f, true);
+		FVector Up = FVector::UpVector;
+		FVector Right = FVector::CrossProduct(Up, ClimbWallNormal).GetSafeNormal();
+		FVector ClimbMove =
+			(Up * MoveInput.Y) +
+			(Right * MoveInput.X);
+		MoveWithCollisions(ClimbMove * ClimbSpeed * DeltaTime);
+		return;
+	}
 	//GetClampedToMaxSize is used to prevent faster diagonal movement when both forward and right input are given
 	FVector DesiredDirection = MoveInput.GetClampedToMaxSize(1.0f);
 	DesiredDirection.Z = 0.0f;
@@ -88,16 +104,6 @@ void AMovementPawn::Tick(float DeltaTime)
 		FVector HorizontalVelocity = FVector(Velocity.X, Velocity.Y, 0.0f);
 		HorizontalVelocity = HorizontalVelocity.GetClampedToMaxSize(MaxSpeed);
 
-		Velocity.X = HorizontalVelocity.X;
-		Velocity.Y = HorizontalVelocity.Y;
-	}
-
-	if (!MoveInput.IsNearlyZero()) {
-
-		Velocity += DesiredDirection * Acceleration * DeltaTime;
-		
-		FVector HorizontalVelocity = FVector(Velocity.X, Velocity.Y, 0.0f);
-		HorizontalVelocity = HorizontalVelocity.GetClampedToMaxSize(MaxSpeed);
 		Velocity.X = HorizontalVelocity.X;
 		Velocity.Y = HorizontalVelocity.Y;
 	}
@@ -120,6 +126,9 @@ void AMovementPawn::Tick(float DeltaTime)
 	FVector CameraLocation = Camera->GetRelativeLocation();
 	CameraLocation.Z = FMath::FInterpTo(CameraLocation.Z, TargetCameraHeight, DeltaTime, CrouchInterpSpeed);
 	Camera->SetRelativeLocation(CameraLocation);
+	if (!isClimbing) {
+		RestoreStamina();
+	}
 	ApplyGravity(DeltaTime);
 	FVector Movement = Velocity * DeltaTime;
 	MoveWithCollisions(Movement);
@@ -333,7 +342,6 @@ void AMovementPawn::CheckGrounded()
 	}
 }
 
-
 void AMovementPawn::CheckInteractable()
 {
 	if (!Camera) return;
@@ -353,30 +361,11 @@ void AMovementPawn::CheckInteractable()
 		ECC_Pawn,
 		Params
 	);
-
-	DrawDebugLine(
-		GetWorld(),
-		Start,
-		End,
-		bHit ? FColor::Green : FColor::Red,
-		false,
-		0.0f,
-		0,
-		2.0f
-	);
-
-	if (bHit)
+	if (bHit && Hit.GetActor())
 	{
-		// Debug what you hit
-		if (GEngine)
-		{
-			GEngine->AddOnScreenDebugMessage(
-				-1,
-				5.f,
-				FColor::Yellow,
-				FString::Printf(TEXT("Hit: %s"), *Hit.GetActor()->GetName())
-			);
-		}
+		isClimbing = true;
+		Velocity = FVector::ZeroVector; // stop all movement when starting to climb
+		ClimbWallNormal = Hit.ImpactNormal;
 	}
 }
 
@@ -406,16 +395,14 @@ void AMovementPawn::StopJumping()
 
 void AMovementPawn::Interact()
 {
-	if (GEngine)
-	{
-		GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, FString::Printf(TEXT("Checking for interactable!")));
-	}
 	CheckInteractable();
+
 }
 
 void AMovementPawn::StopInteract()
 {
-	 
+	isClimbing = false;
+	ClimbWallNormal = FVector::ZeroVector;
 }
 
 void AMovementPawn::SnapToGround()
@@ -432,5 +419,12 @@ void AMovementPawn::SnapToGround()
 	bool bHit = GetWorld()->LineTraceSingleByChannel(Hit, Start, End, ECC_Visibility, Params);
 	if (bHit) {
 		SetActorLocation(Hit.ImpactPoint + FVector(0, 0, CapsuleCollider->GetScaledCapsuleHalfHeight()));
+	}
+}
+
+void AMovementPawn::RestoreStamina() {
+	if (!isClimbing && CurrentStamina < MaxStamina) {
+		CurrentStamina += StaminaDrainRate * GetWorld()->GetDeltaSeconds();
+		CurrentStamina = FMath::Min(CurrentStamina, MaxStamina);
 	}
 }
