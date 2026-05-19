@@ -49,12 +49,14 @@ public:
 	void SnapToGround();
 	void RestoreStamina();
 	bool CanStandUp() const;
+	bool ValidateClimbWall();
 
 	bool isSprinting = false;
 	bool isCrouching = false;
 	bool isGrounded = false;
 	bool isClimbing = false;
 	FVector GroundNormal;
+	FVector2D RawMoveInput;
 
 	float CurrentSpeed = 0.0f;
 	UPROPERTY(EditAnywhere)

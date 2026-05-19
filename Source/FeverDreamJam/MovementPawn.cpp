@@ -79,6 +79,12 @@ void AMovementPawn::Tick(float DeltaTime)
 	Super::Tick(DeltaTime);
 	CheckGrounded();
 	if (isClimbing) {
+		if (!ValidateClimbWall())
+		{
+			isClimbing = false;
+			RefreshMovementState();
+			return;
+		}
 		CurrentStamina -= StaminaDrainRate * DeltaTime;
 		if (CurrentStamina <= 0.0f) {
 			isClimbing = false;
@@ -89,8 +95,8 @@ void AMovementPawn::Tick(float DeltaTime)
 		FVector Up = FVector::UpVector;
 		FVector Right = FVector::CrossProduct(Up, ClimbWallNormal).GetSafeNormal();
 		FVector ClimbMove =
-			(Up * MoveInput.Y) +
-			(Right * MoveInput.X);
+			(Up * RawMoveInput.Y) +
+			(Right * RawMoveInput.X);
 		MoveWithCollisions(ClimbMove * ClimbSpeed * DeltaTime);
 		return;
 	}
@@ -222,17 +228,10 @@ void AMovementPawn::RefreshMovementState() {
 }
 
 void AMovementPawn::Move(const FInputActionValue& Value)
-{	
+{
 	FVector2D Input = Value.Get<FVector2D>();
-	if (GEngine)
-	{
-		GEngine->AddOnScreenDebugMessage(
-			1,
-			0.f,	
-			FColor::Green,
-			Value.ToString()
-		);
-	}
+
+	RawMoveInput = Input;
 
 	if (!Controller) {
 		return;
@@ -240,8 +239,10 @@ void AMovementPawn::Move(const FInputActionValue& Value)
 
 	FRotator ControlRotation = Controller->GetControlRotation();
 	FRotator YawRotation(0, ControlRotation.Yaw, 0);
+
 	FVector ForwardDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
 	FVector RightDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
+
 	MoveInput = ForwardDirection * Input.Y + RightDirection * Input.X;
 }
 
@@ -358,7 +359,7 @@ void AMovementPawn::CheckInteractable()
 		Hit,
 		Start,
 		End,
-		ECC_Pawn,
+		ECC_Visibility,
 		Params
 	);
 	if (bHit && Hit.GetActor())
@@ -367,6 +368,49 @@ void AMovementPawn::CheckInteractable()
 		Velocity = FVector::ZeroVector; // stop all movement when starting to climb
 		ClimbWallNormal = Hit.ImpactNormal;
 	}
+}
+
+bool AMovementPawn::ValidateClimbWall()
+{
+	if (!Camera) return false;
+
+	FVector Start = Camera->GetComponentLocation();
+	FVector Forward = Camera->GetForwardVector();
+	FVector End = Start + (Forward * InteractableCheckDistance);
+
+	FHitResult Hit;
+	FCollisionQueryParams Params;
+	Params.AddIgnoredActor(this);
+
+	bool bHit = GetWorld()->LineTraceSingleByChannel(
+		Hit,
+		Start,
+		End,
+		ECC_Visibility,
+		Params
+	);
+
+#if ENABLE_DRAW_DEBUG
+	DrawDebugLine(GetWorld(), Start, End, bHit ? FColor::Green : FColor::Red, false, 0.1f, 0, 2.0f);
+#endif
+
+	if (!bHit)
+	{
+		return false;
+	}
+	
+	float VerticalDot = FVector::DotProduct(Hit.ImpactNormal, FVector::UpVector);
+
+	// Reject ground/ceiling-like surfaces
+	if (FMath::Abs(VerticalDot) > 0.2f)
+	{
+		return false;
+	}
+
+	// Update wall normal so movement stays aligned
+	ClimbWallNormal = Hit.ImpactNormal;
+
+	return true;
 }
 
 void AMovementPawn::ApplyGravity(float DeltaTime)
