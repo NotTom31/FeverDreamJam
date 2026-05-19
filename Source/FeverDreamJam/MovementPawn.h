@@ -8,7 +8,10 @@ class USpringArmComponent;
 class UInputMappingContext;
 class UInputAction;
 class UCameraComponent;
-#include "MovementPawn.generated.h"		
+#include "FMODEvent.h"
+#include "FMODAudioComponent.h"
+#include "MovementPawn.generated.h"	
+
 
 
 UCLASS()
@@ -55,6 +58,7 @@ public:
 	bool isCrouching = false;
 	bool isGrounded = false;
 	bool isClimbing = false;
+	bool bInvertLookY = false;
 	FVector GroundNormal;
 	FVector2D RawMoveInput;
 
@@ -126,6 +130,12 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Climb")
 	float StaminaDrainRate = 1.0f;
 	FVector ClimbWallNormal;
+
+	UPROPERTY(EditAnywhere, Category = "Audio")
+	UFMODAudioComponent* FootstepAudioComponent;
+
+	UPROPERTY(EditAnywhere, Category = "Audio")
+	UFMODEvent* FootstepLoopEvent;
 
 private:
 	UPROPERTY(EditAnywhere, Category = "Input")

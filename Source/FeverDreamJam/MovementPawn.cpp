@@ -34,6 +34,10 @@ AMovementPawn::AMovementPawn()
 	Camera->SetRelativeLocation(FVector(0, 0.0f, 64.0f));
 	Camera->bUsePawnControlRotation = true;
 
+	FootstepAudioComponent = CreateDefaultSubobject<UFMODAudioComponent>(TEXT("FootstepAudio"));
+	FootstepAudioComponent->SetupAttachment(RootComponent);
+	FootstepAudioComponent->bAutoActivate = false;
+
 	bUseControllerRotationYaw = true;
 	bUseControllerRotationPitch = true;
 	bUseControllerRotationRoll = false;
@@ -47,21 +51,14 @@ void AMovementPawn::BeginPlay()
 {
 	Super::BeginPlay();
 
-	if (GEngine)
-	{
-		GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Yellow, TEXT("Pawn BeginPlay"));
-	}
-
 	APlayerController* PC = Cast<APlayerController>(GetController());
 	if (!PC)
 	{
 		GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, TEXT("No PlayerController"));
 		return;
 	}
-
 	UEnhancedInputLocalPlayerSubsystem* Subsystem =
 		ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PC->GetLocalPlayer());
-
 	if (Subsystem && InputMappingContext)
 	{
 		Subsystem->AddMappingContext(InputMappingContext, 0);
@@ -70,6 +67,9 @@ void AMovementPawn::BeginPlay()
 	else
 	{
 		GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, TEXT("Missing IMC or Subsystem"));
+	}
+	if (FootstepAudioComponent && FootstepLoopEvent) {
+		FootstepAudioComponent->SetEvent(FootstepLoopEvent);
 	}
 }
 
@@ -118,7 +118,23 @@ void AMovementPawn::Tick(float DeltaTime)
 		Velocity.X = FMath::FInterpTo(Velocity.X, 0.0f, DeltaTime, GroundFriction);
 		Velocity.Y = FMath::FInterpTo(Velocity.Y, 0.0f, DeltaTime, GroundFriction);
 	}
-	
+	bool bShouldPlayFootsteps = isGrounded &&
+		!DesiredDirection.IsNearlyZero();
+
+	if (bShouldPlayFootsteps && FootstepAudioComponent) {
+		if (!FootstepAudioComponent->IsPlaying()) {
+			FootstepAudioComponent->Play();
+		}
+		float SpeedType = isCrouching ? 1.0f : isSprinting ? 3.0f : 2.0f;
+
+		FootstepAudioComponent->SetParameter(FName("Speed"), SpeedType);
+	}
+	else {
+		if (FootstepAudioComponent->IsPlaying()) {
+			FootstepAudioComponent->Stop();
+		}
+	}
+
 	float TargetHalfHeight = isCrouching ? CrouchCapsuleHalfHeight : StandingCapsuleHalfHeight;
 	float NewHalfHeight = FMath::FInterpTo(
 		CapsuleCollider->GetUnscaledCapsuleHalfHeight(), 
@@ -194,7 +210,6 @@ bool AMovementPawn::CanStandUp() const {
 		Params
 	);
 }
-
 
 void AMovementPawn::StartCrouching()
 {
