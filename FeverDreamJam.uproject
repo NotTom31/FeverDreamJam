@@ -16,6 +16,10 @@
 			"Enabled": true
 		},
 		{
+			"Name": "FMODStudio",
+			"Enabled": true
+		},
+		{
 			"Name": "VisualStudioTools",
 			"Enabled": false,
 			"SupportedTargetPlatforms": [
