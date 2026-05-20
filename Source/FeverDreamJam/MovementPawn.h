@@ -153,10 +153,28 @@ public:
 	UFMODAudioComponent* MantleAudioComponent;
 
 	UPROPERTY(EditAnywhere, Category = "Audio")
+	UFMODAudioComponent* JumpAudioComponent;
+
+	UPROPERTY(EditAnywhere, Category = "Audio")
+	UFMODAudioComponent* CrouchAudioComponent;
+
+	UPROPERTY(EditAnywhere, Category = "Audio")
+	UFMODAudioComponent* ClimbingLoopComponent;
+
+	UPROPERTY(EditAnywhere, Category = "Audio")
 	UFMODEvent* MantleEvent;
 
 	UPROPERTY(EditAnywhere, Category = "Audio")
 	UFMODEvent* FootstepLoopEvent;
+
+	UPROPERTY(EditAnywhere, Category = "Audio")
+	UFMODEvent* CrouchEvent;
+
+	UPROPERTY(EditAnywhere, Category = "Audio")
+	UFMODEvent* JumpEvent;
+
+	UPROPERTY(EditAnywhere, Category = "Audio")
+	UFMODEvent* ClimbingLoopEvent;
 
 private:
 	UPROPERTY(EditAnywhere, Category = "Input")
