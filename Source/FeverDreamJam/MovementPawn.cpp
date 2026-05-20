@@ -17,7 +17,7 @@ AMovementPawn::AMovementPawn()
 	PrimaryActorTick.bCanEverTick = true;
 	//Root component is the base of the actor, all other components will be attached to it
 	CapsuleCollider = CreateDefaultSubobject<UCapsuleComponent>(TEXT("CapsuleCollider"));
-	CapsuleCollider->InitCapsuleSize(40.f, 90.f);
+	CapsuleCollider->InitCapsuleSize(45.f, 90.f);
 	CapsuleCollider->SetCollisionProfileName(TEXT("Pawn"));
 	CapsuleCollider->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 
@@ -73,19 +73,43 @@ void AMovementPawn::BeginPlay()
 	}
 }
 
+
 void AMovementPawn::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+	CheckGrounded();
+	if (isClimbing) {
+		if (!ValidateClimbWall())
+		{
+			isClimbing = false;
+			RefreshMovementState();
+			return;
+		}
+		CurrentStamina -= StaminaDrainRate * DeltaTime;
+		if (CurrentStamina <= 0.0f) {
+			isClimbing = false;
+			RefreshMovementState();
+			return;
+		}
+		AddActorWorldOffset(-ClimbWallNormal * 2.0f, true);
+		FVector Up = FVector::UpVector;
+		FVector Right = FVector::CrossProduct(Up, ClimbWallNormal).GetSafeNormal();
+		FVector ClimbMove =
+			(Up * RawMoveInput.Y) +
+			(Right * RawMoveInput.X);
+		MoveWithCollisions(ClimbMove * ClimbSpeed * DeltaTime);
+		return;
+	}
 	//GetClampedToMaxSize is used to prevent faster diagonal movement when both forward and right input are given
 	FVector DesiredDirection = MoveInput.GetClampedToMaxSize(1.0f);
-
-	if (!MoveInput.IsNearlyZero()) {
-
+	DesiredDirection.Z = 0.0f;
+	if (!DesiredDirection.IsNearlyZero()) {
+		DesiredDirection.Normalize();
 		Velocity += DesiredDirection * Acceleration * DeltaTime;
-		Velocity = Velocity.GetClampedToMaxSize(MaxSpeed);
-		
+
 		FVector HorizontalVelocity = FVector(Velocity.X, Velocity.Y, 0.0f);
 		HorizontalVelocity = HorizontalVelocity.GetClampedToMaxSize(MaxSpeed);
+
 		Velocity.X = HorizontalVelocity.X;
 		Velocity.Y = HorizontalVelocity.Y;
 	}
@@ -94,10 +118,27 @@ void AMovementPawn::Tick(float DeltaTime)
 		Velocity.X = FMath::FInterpTo(Velocity.X, 0.0f, DeltaTime, GroundFriction);
 		Velocity.Y = FMath::FInterpTo(Velocity.Y, 0.0f, DeltaTime, GroundFriction);
 	}
-	CheckGrounded();
+	
+	float TargetHalfHeight = isCrouching ? CrouchCapsuleHalfHeight : StandingCapsuleHalfHeight;
+	float NewHalfHeight = FMath::FInterpTo(
+		CapsuleCollider->GetUnscaledCapsuleHalfHeight(), 
+		TargetHalfHeight, 
+		DeltaTime, 
+		CrouchInterpSpeed);
+	CapsuleCollider->SetCapsuleHalfHeight(NewHalfHeight, true);
+
+
+	float TargetCameraHeight = isCrouching ? CrouchingCameraHeight : StandingCameraHeight;
+	FVector CameraLocation = Camera->GetRelativeLocation();
+	CameraLocation.Z = FMath::FInterpTo(CameraLocation.Z, TargetCameraHeight, DeltaTime, CrouchInterpSpeed);
+	Camera->SetRelativeLocation(CameraLocation);
+	if (!isClimbing) {
+		RestoreStamina();
+	}
 	ApplyGravity(DeltaTime);
 	FVector Movement = Velocity * DeltaTime;
 	MoveWithCollisions(Movement);
+	SnapToGround();
 }
 
 // Called to bind functionality to input
@@ -122,40 +163,42 @@ void AMovementPawn::SetupPlayerInputComponent(UInputComponent* PlayerInputCompon
 
 void AMovementPawn::StartSprinting()
 {
-
 	if(!isCrouching) {
-		if (GEngine)
-		{
-			GEngine->AddOnScreenDebugMessage(
-				1,
-				0.f,
-				FColor::Green,
-				FString::Printf(TEXT("Should be sprinting!"))
-			);
-		}
 		isSprinting = true;
 		RefreshMovementState();
 	}
 }
+
 void AMovementPawn::StopSprinting()
 {
 	isSprinting = false;
 	RefreshMovementState();
 }
 
+bool AMovementPawn::CanStandUp() const {
+	FVector Start = GetActorLocation();
+	FVector End = Start + FVector(0, 0, StandingCapsuleHalfHeight - CrouchCapsuleHalfHeight);
+	FCollisionShape StandingCapsule = FCollisionShape::MakeCapsule(
+		CapsuleCollider->GetScaledCapsuleRadius(),
+		StandingCapsuleHalfHeight
+	);
+	FCollisionQueryParams Params;
+	Params.AddIgnoredActor(this);
+	// If the line trace hits something, we can't stand up
+	return !GetWorld()->SweepTestByChannel(
+		Start,
+		End,
+		FQuat::Identity,
+		ECC_Pawn,
+		StandingCapsule,
+		Params
+	);
+}
+
+
 void AMovementPawn::StartCrouching()
 {
-
 	if (!isSprinting) {
-		if (GEngine)
-		{
-			GEngine->AddOnScreenDebugMessage(
-				1,
-				0.f,
-				FColor::Green,
-				FString::Printf(TEXT("Should be sprinting!"))
-			);
-		}
 		isCrouching = true;
 		RefreshMovementState();
 	}
@@ -163,8 +206,12 @@ void AMovementPawn::StartCrouching()
 
 void AMovementPawn::StopCrouching()
 {
-		isCrouching = false;
-		RefreshMovementState();
+	if (!CanStandUp()) {
+		return;
+	}
+
+	isCrouching = false;
+	RefreshMovementState();
 }
 
 void AMovementPawn::RefreshMovementState() {
@@ -181,17 +228,10 @@ void AMovementPawn::RefreshMovementState() {
 }
 
 void AMovementPawn::Move(const FInputActionValue& Value)
-{	
+{
 	FVector2D Input = Value.Get<FVector2D>();
-	if (GEngine)
-	{
-		GEngine->AddOnScreenDebugMessage(
-			1,
-			0.f,	
-			FColor::Green,
-			Value.ToString()
-		);
-	}
+
+	RawMoveInput = Input;
 
 	if (!Controller) {
 		return;
@@ -199,10 +239,13 @@ void AMovementPawn::Move(const FInputActionValue& Value)
 
 	FRotator ControlRotation = Controller->GetControlRotation();
 	FRotator YawRotation(0, ControlRotation.Yaw, 0);
+
 	FVector ForwardDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
 	FVector RightDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
+
 	MoveInput = ForwardDirection * Input.Y + RightDirection * Input.X;
 }
+
 
 void AMovementPawn::MoveWithCollisions(const FVector& DesiredMovement)
 {
@@ -287,16 +330,17 @@ void AMovementPawn::CheckGrounded()
 	Params.AddIgnoredActor(this);
 	// this line performs the line trace and sets isGrounded to true if it hits something, false otherwise
 	isGrounded = GetWorld()->LineTraceSingleByChannel(Hit, Start, End, ECC_Visibility, Params);
-	DrawDebugLine(
-		GetWorld(),
-		Start,
-		End,
-		isGrounded ? FColor::Green : FColor::Red,
-		false,
-		0.0f,
-		0,
-		2.0f
-	);
+	if (isGrounded) {
+		GroundNormal = Hit.ImpactNormal;
+		float SlopeAngle = FMath::RadiansToDegrees(FMath::Acos(FVector::DotProduct(GroundNormal, FVector::UpVector)));
+
+		if (SlopeAngle > MaxWalkableSlopeAngle) {
+			isGrounded = false;
+		}
+	}
+	else {
+		GroundNormal = FVector::UpVector;
+	}
 }
 
 void AMovementPawn::CheckInteractable()
@@ -318,31 +362,55 @@ void AMovementPawn::CheckInteractable()
 		ECC_Visibility,
 		Params
 	);
+	if (bHit && Hit.GetActor())
+	{
+		isClimbing = true;
+		Velocity = FVector::ZeroVector; // stop all movement when starting to climb
+		ClimbWallNormal = Hit.ImpactNormal;
+	}
+}
 
-	DrawDebugLine(
-		GetWorld(),
+bool AMovementPawn::ValidateClimbWall()
+{
+	if (!Camera) return false;
+
+	FVector Start = Camera->GetComponentLocation();
+	FVector Forward = Camera->GetForwardVector();
+	FVector End = Start + (Forward * InteractableCheckDistance);
+
+	FHitResult Hit;
+	FCollisionQueryParams Params;
+	Params.AddIgnoredActor(this);
+
+	bool bHit = GetWorld()->LineTraceSingleByChannel(
+		Hit,
 		Start,
 		End,
-		bHit ? FColor::Green : FColor::Red,
-		false,
-		0.0f,
-		0,
-		2.0f
+		ECC_Visibility,
+		Params
 	);
 
-	if (bHit)
+#if ENABLE_DRAW_DEBUG
+	DrawDebugLine(GetWorld(), Start, End, bHit ? FColor::Green : FColor::Red, false, 0.1f, 0, 2.0f);
+#endif
+
+	if (!bHit)
 	{
-		// Debug what you hit
-		if (GEngine)
-		{
-			GEngine->AddOnScreenDebugMessage(
-				-1,
-				5.f,
-				FColor::Yellow,
-				FString::Printf(TEXT("Hit: %s"), *Hit.GetActor()->GetName())
-			);
-		}
+		return false;
 	}
+	
+	float VerticalDot = FVector::DotProduct(Hit.ImpactNormal, FVector::UpVector);
+
+	// Reject ground/ceiling-like surfaces
+	if (FMath::Abs(VerticalDot) > 0.2f)
+	{
+		return false;
+	}
+
+	// Update wall normal so movement stays aligned
+	ClimbWallNormal = Hit.ImpactNormal;
+
+	return true;
 }
 
 void AMovementPawn::ApplyGravity(float DeltaTime)
@@ -350,8 +418,9 @@ void AMovementPawn::ApplyGravity(float DeltaTime)
 	if (!isGrounded) {
 		Velocity.Z += GetWorld()->GetGravityZ() * DeltaTime;
 	}
-	else if (Velocity.Z < 0) {
-		Velocity.Z = 0;
+	else if (Velocity.Z < 0.0f)
+	{
+		Velocity.Z = 0.0f;
 	}
 }
 
@@ -359,6 +428,7 @@ void AMovementPawn::Jump()
 {
 	if (isGrounded) {
 		Velocity.Z = JumpStrength;
+		isGrounded = false;
 	}
 }
 
@@ -369,14 +439,36 @@ void AMovementPawn::StopJumping()
 
 void AMovementPawn::Interact()
 {
-	if (GEngine)
-	{
-		GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, FString::Printf(TEXT("Checking for interactable!")));
-	}
 	CheckInteractable();
+
 }
 
 void AMovementPawn::StopInteract()
 {
-	 
+	isClimbing = false;
+	ClimbWallNormal = FVector::ZeroVector;
+}
+
+void AMovementPawn::SnapToGround()
+{
+	if (!isGrounded || Velocity.Z > 0.0f) {
+		return;
+	}
+	FVector Start = GetActorLocation();
+	FVector End = Start - FVector(0, 0, GroundSnapDistance);
+
+	FHitResult Hit;
+	FCollisionQueryParams Params;
+	Params.AddIgnoredActor(this);
+	bool bHit = GetWorld()->LineTraceSingleByChannel(Hit, Start, End, ECC_Visibility, Params);
+	if (bHit) {
+		SetActorLocation(Hit.ImpactPoint + FVector(0, 0, CapsuleCollider->GetScaledCapsuleHalfHeight()));
+	}
+}
+
+void AMovementPawn::RestoreStamina() {
+	if (!isClimbing && CurrentStamina < MaxStamina) {
+		CurrentStamina += StaminaDrainRate * GetWorld()->GetDeltaSeconds();
+		CurrentStamina = FMath::Min(CurrentStamina, MaxStamina);
+	}
 }

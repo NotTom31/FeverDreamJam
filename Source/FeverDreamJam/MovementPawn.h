@@ -33,7 +33,7 @@ public:
 	void Move(const FInputActionValue& Value);
 	void Look(const FInputActionValue& Value);
 	void CheckGrounded();
-	void CheckInteractable();
+	void CheckInteractable();	
 	void Jump();
 	void StopJumping();
 	void ApplyGravity(float DeltaTime);
@@ -45,10 +45,18 @@ public:
 	void StopCrouching();
 	void RefreshMovementState();
 	void MoveWithCollisions(const FVector& Movement);
+	void AdjustCapsuleHeight(float TargetHeight, float DeltaTime);
+	void SnapToGround();
+	void RestoreStamina();
+	bool CanStandUp() const;
+	bool ValidateClimbWall();
 
 	bool isSprinting = false;
 	bool isCrouching = false;
 	bool isGrounded = false;
+	bool isClimbing = false;
+	FVector GroundNormal;
+	FVector2D RawMoveInput;
 
 	float CurrentSpeed = 0.0f;
 	UPROPERTY(EditAnywhere)
@@ -88,8 +96,36 @@ public:
 	UStaticMeshComponent* Mesh;
 	UPROPERTY(VisibleAnywhere)
 	FVector MoveInput;
-	// Called to bind functionality to input
+	//Crouching stats
+	UPROPERTY(EditAnywhere, Category = "Crouch")
+	float StandingCapsuleHalfHeight = 90.0f;
 
+	UPROPERTY(EditAnywhere, Category = "Crouch")
+	float CrouchCapsuleHalfHeight = 45.0f;
+
+	UPROPERTY(EditAnywhere, Category = "Crouch")
+	float StandingCameraHeight = 64.0f;
+
+	UPROPERTY(EditAnywhere, Category = "Crouch")
+	float CrouchingCameraHeight = 32.0f;
+
+	UPROPERTY(EditAnywhere, Category = "Crouch")
+	float CrouchInterpSpeed = 10.0f;
+
+	UPROPERTY(EditAnywhere, Category = "Slope")
+	float MaxWalkableSlopeAngle = 45.0f;
+
+	UPROPERTY(EditAnywhere, Category = "Slope")
+	float GroundSnapDistance = 20.0f;
+
+	UPROPERTY(EditAnywhere, Category = "Climb")
+	float ClimbSpeed = 300.0f;
+	UPROPERTY(EditAnywhere, Category = "Climb")
+	float MaxStamina = 5.0f;
+	float CurrentStamina = MaxStamina;
+	UPROPERTY(EditAnywhere, Category = "Climb")
+	float StaminaDrainRate = 1.0f;
+	FVector ClimbWallNormal;
 
 private:
 	UPROPERTY(EditAnywhere, Category = "Input")
