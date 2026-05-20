@@ -78,38 +78,12 @@ void AMovementPawn::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 	CheckGrounded();
-	if (isMantling)
-	{
-		MantleTimer += DeltaTime;
-
-		float Alpha = MantleTimer / MantleDuration;
-		Alpha = FMath::Clamp(Alpha, 0.0f, 1.0f);
-
-		// Smooth step easing
-		float SmoothAlpha = FMath::SmoothStep(0.0f, 1.0f, Alpha);
-
-		FVector NewLocation = FMath::Lerp(
-			MantleStartLocation,
-			MantleTargetLocation,
-			SmoothAlpha
-		);
-
-		SetActorLocation(NewLocation, false);
-
-		if (Alpha >= 1.0f)
-		{
-			isMantling = false;
-			isGrounded = true;
-		}
-
-		return;
-	}
 	if (isClimbing) {
-		if (RawMoveInput.Y > 0.5f && TryMantle()) {
-			return;
-		}
 		if (!ValidateClimbWall())
 		{
+			if (TryMantle()) {
+				return;
+			}
 			isClimbing = false;
 			RefreshMovementState();
 			return;
@@ -160,15 +134,15 @@ void AMovementPawn::Tick(float DeltaTime)
 	}
 	else {
 		if (FootstepAudioComponent->IsPlaying()) {
-			FootstepAudioComponent->SetParameter(FName("Speed"), 0.0f);
+			FootstepAudioComponent->Stop();
 		}
 	}
 
 	float TargetHalfHeight = isCrouching ? CrouchCapsuleHalfHeight : StandingCapsuleHalfHeight;
 	float NewHalfHeight = FMath::FInterpTo(
-		CapsuleCollider->GetUnscaledCapsuleHalfHeight(), 
-		TargetHalfHeight, 
-		DeltaTime, 
+		CapsuleCollider->GetUnscaledCapsuleHalfHeight(),
+		TargetHalfHeight,
+		DeltaTime,
 		CrouchInterpSpeed);
 	CapsuleCollider->SetCapsuleHalfHeight(NewHalfHeight, true);
 
@@ -208,7 +182,7 @@ void AMovementPawn::SetupPlayerInputComponent(UInputComponent* PlayerInputCompon
 
 void AMovementPawn::StartSprinting()
 {
-	if(!isCrouching) {
+	if (!isCrouching) {
 		isSprinting = true;
 		RefreshMovementState();
 	}
@@ -259,7 +233,7 @@ void AMovementPawn::StopCrouching()
 }
 
 void AMovementPawn::RefreshMovementState() {
-	
+
 	if (isCrouching) {
 		MaxSpeed = CrouchSpeed;
 	}
@@ -305,7 +279,7 @@ void AMovementPawn::MoveWithCollisions(const FVector& DesiredMovement)
 		if (RemainingMovement.IsNearlyZero()) {
 			break;
 		}
-		
+
 		FVector Start = GetActorLocation();
 		FVector End = Start + RemainingMovement;
 
@@ -316,7 +290,7 @@ void AMovementPawn::MoveWithCollisions(const FVector& DesiredMovement)
 		FCollisionShape CapsuleShape = FCollisionShape::MakeCapsule(CapsuleRadius, CapsuleHalfHeight);
 
 		FCollisionShape CapsuleShape2D = FCollisionShape::MakeCapsule(
-			CapsuleRadius, 
+			CapsuleRadius,
 			CapsuleHalfHeight
 		);
 		FCollisionQueryParams Params;
@@ -442,7 +416,7 @@ bool AMovementPawn::ValidateClimbWall()
 	{
 		return false;
 	}
-	
+
 	float VerticalDot = FVector::DotProduct(Hit.ImpactNormal, FVector::UpVector);
 
 	// Reject ground/ceiling-like surfaces
@@ -477,7 +451,7 @@ void AMovementPawn::Jump()
 }
 
 void AMovementPawn::StopJumping()
-{ 
+{
 	//Currently does nothing, but could be used to implement variable jump height by reducing the upward velocity when the jump button is released
 }
 
@@ -525,15 +499,15 @@ bool AMovementPawn::TryMantle()
 
 	FVector Start =
 		GetActorLocation()
-		+ FVector(0, 0, CapsuleCollider->GetScaledCapsuleHalfHeight() * 0.5f)
-		+ Forward * 20.0f;
+		+ FVector(0, 0, CapsuleCollider->GetScaledCapsuleHalfHeight() + 40.0f)
+		+ Forward * 50.0f;
 
-	FVector End = Start - FVector(0, 0, 200.0f);
+	FVector End = Start - FVector(0, 0, 120.0f);
 
 	FHitResult Hit;
 	FCollisionQueryParams Params;
 	Params.AddIgnoredActor(this);
-	DrawDebugLine(GetWorld(), Start, End, FColor::Blue, false, 1.0f, 0, 3.0f);
+
 	bool bHit = GetWorld()->LineTraceSingleByChannel(
 		Hit,
 		Start,
@@ -557,11 +531,9 @@ bool AMovementPawn::TryMantle()
 	FVector TargetLocation =
 		Hit.ImpactPoint
 		+ FVector(0, 0, CapsuleCollider->GetScaledCapsuleHalfHeight() + 2.0f);
-	DrawDebugSphere(GetWorld(), Hit.ImpactPoint, 12.0f, 12, FColor::Green, false, 2.0f);
-	MantleStartLocation = GetActorLocation();
-	MantleTargetLocation = TargetLocation;
-	MantleTimer = 0.0f;
-	isMantling = true;
+
+	SetActorLocation(TargetLocation, false);
+
 	isClimbing = false;
 	Velocity = FVector::ZeroVector;
 
