@@ -54,6 +54,10 @@ AMovementPawn::AMovementPawn()
 	ClimbingLoopComponent->SetupAttachment(RootComponent);
 	ClimbingLoopComponent->bAutoActivate = false;
 
+	LandingAudioComponent = CreateDefaultSubobject<UFMODAudioComponent>(TEXT("LandingAudio"));
+	LandingAudioComponent->SetupAttachment(RootComponent);
+	LandingAudioComponent->bAutoActivate = false;
+
 	bUseControllerRotationYaw = true;
 	bUseControllerRotationPitch = true;
 	bUseControllerRotationRoll = false;
@@ -96,7 +100,16 @@ void AMovementPawn::BeginPlay()
 void AMovementPawn::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+	wasGrounded = isGrounded;
 	CheckGrounded();
+	if (!wasGrounded && isGrounded)
+	{
+		if (LandingAudioComponent && LandingEvent)
+		{
+			LandingAudioComponent->SetEvent(LandingEvent);
+			LandingAudioComponent->Play();
+		}
+	}
 	if (IsMantling)
 	{
 		
