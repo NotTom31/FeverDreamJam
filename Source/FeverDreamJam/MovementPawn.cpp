@@ -38,6 +38,10 @@ AMovementPawn::AMovementPawn()
 	FootstepAudioComponent->SetupAttachment(RootComponent);
 	FootstepAudioComponent->bAutoActivate = false;
 
+	MantleAudioComponent = CreateDefaultSubobject<UFMODAudioComponent>(TEXT("MantleAudio"));
+	MantleAudioComponent->SetupAttachment(RootComponent);
+	MantleAudioComponent->bAutoActivate = false;
+
 	bUseControllerRotationYaw = true;
 	bUseControllerRotationPitch = true;
 	bUseControllerRotationRoll = false;
@@ -71,6 +75,9 @@ void AMovementPawn::BeginPlay()
 	if (FootstepAudioComponent && FootstepLoopEvent) {
 		FootstepAudioComponent->SetEvent(FootstepLoopEvent);
 	}
+	if (MantleAudioComponent && MantleEvent) {
+		MantleAudioComponent->SetEvent(MantleEvent);
+	}
 }
 
 
@@ -80,6 +87,7 @@ void AMovementPawn::Tick(float DeltaTime)
 	CheckGrounded();
 	if (IsMantling)
 	{
+		
 		MantleTime += DeltaTime;
 
 		float Alpha = FMath::Clamp(MantleTime / MantleDuration, 0.0f, 1.0f);
@@ -150,7 +158,7 @@ void AMovementPawn::Tick(float DeltaTime)
 	}
 	else {
 		if (FootstepAudioComponent->IsPlaying()) {
-			FootstepAudioComponent->Stop();
+			FootstepAudioComponent->SetParameter(FName("Speed"), 0.0f);
 		}
 	}
 
@@ -550,7 +558,9 @@ bool AMovementPawn::TryMantle()
 
 	IsMantling = true;
 	MantleTime = 0.0f;
-
+	if (MantleAudioComponent && MantleEvent) {
+		MantleAudioComponent->Play();
+	}	
 	MantleStart = GetActorLocation();
 	MantleTarget = TargetLocation;
 
