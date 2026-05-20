@@ -8,7 +8,10 @@ class USpringArmComponent;
 class UInputMappingContext;
 class UInputAction;
 class UCameraComponent;
-#include "MovementPawn.generated.h"		
+#include "FMODEvent.h"
+#include "FMODAudioComponent.h"
+#include "MovementPawn.generated.h"	
+
 
 
 UCLASS()
@@ -33,7 +36,7 @@ public:
 	void Move(const FInputActionValue& Value);
 	void Look(const FInputActionValue& Value);
 	void CheckGrounded();
-	void CheckInteractable();
+	void CheckInteractable();	
 	void Jump();
 	void StopJumping();
 	void ApplyGravity(float DeltaTime);
@@ -45,10 +48,35 @@ public:
 	void StopCrouching();
 	void RefreshMovementState();
 	void MoveWithCollisions(const FVector& Movement);
+	void AdjustCapsuleHeight(float TargetHeight, float DeltaTime);
+	void SnapToGround();
+	void RestoreStamina();
+	bool CanStandUp() const;
+	bool ValidateClimbWall();
+	bool TryMantle();
+	bool isMantling = false;
+	
 
 	bool isSprinting = false;
 	bool isCrouching = false;
 	bool isGrounded = false;
+	bool wasGrounded = false;
+	bool isClimbing = false;
+	bool bInvertLookY = false;
+	FVector GroundNormal;
+	FVector2D RawMoveInput;
+	FVector MantleStartLocation;
+	FVector MantleTargetLocation;
+
+	float MantleTimer = 0.0f;
+	bool IsMantling = false;
+	float MantleTime = 0.0f;
+
+	FVector MantleStart;
+	FVector MantleTarget;
+	
+	UPROPERTY(EditAnywhere, Category = "Mantle")
+	float MantleDuration = 0.35f;
 
 	float CurrentSpeed = 0.0f;
 	UPROPERTY(EditAnywhere)
@@ -88,8 +116,71 @@ public:
 	UStaticMeshComponent* Mesh;
 	UPROPERTY(VisibleAnywhere)
 	FVector MoveInput;
-	// Called to bind functionality to input
+	//Crouching stats
+	UPROPERTY(EditAnywhere, Category = "Crouch")
+	float StandingCapsuleHalfHeight = 90.0f;
 
+	UPROPERTY(EditAnywhere, Category = "Crouch")
+	float CrouchCapsuleHalfHeight = 45.0f;
+
+	UPROPERTY(EditAnywhere, Category = "Crouch")
+	float StandingCameraHeight = 64.0f;
+
+	UPROPERTY(EditAnywhere, Category = "Crouch")
+	float CrouchingCameraHeight = 32.0f;
+
+	UPROPERTY(EditAnywhere, Category = "Crouch")
+	float CrouchInterpSpeed = 10.0f;
+
+	UPROPERTY(EditAnywhere, Category = "Slope")
+	float MaxWalkableSlopeAngle = 45.0f;
+
+	UPROPERTY(EditAnywhere, Category = "Slope")
+	float GroundSnapDistance = 20.0f;
+
+	UPROPERTY(EditAnywhere, Category = "Climb")
+	float ClimbSpeed = 300.0f;
+	UPROPERTY(EditAnywhere, Category = "Climb")
+	float MaxStamina = 5.0f;
+	float CurrentStamina = MaxStamina;
+	UPROPERTY(EditAnywhere, Category = "Climb")
+	float StaminaDrainRate = 1.0f;
+	FVector ClimbWallNormal;
+
+	UPROPERTY(EditAnywhere, Category = "Audio")
+	UFMODAudioComponent* FootstepAudioComponent;
+
+	UPROPERTY(EditAnywhere, Category = "Audio")
+	UFMODAudioComponent* MantleAudioComponent;
+
+	UPROPERTY(EditAnywhere, Category = "Audio")
+	UFMODAudioComponent* JumpAudioComponent;
+
+	UPROPERTY(EditAnywhere, Category = "Audio")
+	UFMODAudioComponent* CrouchAudioComponent;
+
+	UPROPERTY(EditAnywhere, Category = "Audio")
+	UFMODAudioComponent* ClimbingLoopComponent;
+	UPROPERTY(EditAnywhere, Category = "Audio")
+	UFMODAudioComponent* LandingAudioComponent;
+
+	UPROPERTY(EditAnywhere, Category = "Audio")
+	UFMODEvent* LandingEvent;
+
+	UPROPERTY(EditAnywhere, Category = "Audio")
+	UFMODEvent* MantleEvent;
+
+	UPROPERTY(EditAnywhere, Category = "Audio")
+	UFMODEvent* FootstepLoopEvent;
+
+	UPROPERTY(EditAnywhere, Category = "Audio")
+	UFMODEvent* CrouchEvent;
+
+	UPROPERTY(EditAnywhere, Category = "Audio")
+	UFMODEvent* JumpEvent;
+
+	UPROPERTY(EditAnywhere, Category = "Audio")
+	UFMODEvent* ClimbingLoopEvent;
 
 private:
 	UPROPERTY(EditAnywhere, Category = "Input")
