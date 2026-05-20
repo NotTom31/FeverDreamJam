@@ -8,7 +8,10 @@ class USpringArmComponent;
 class UInputMappingContext;
 class UInputAction;
 class UCameraComponent;
-#include "MovementPawn.generated.h"		
+#include "FMODEvent.h"
+#include "FMODAudioComponent.h"
+#include "MovementPawn.generated.h"	
+
 
 
 UCLASS()
@@ -50,13 +53,29 @@ public:
 	void RestoreStamina();
 	bool CanStandUp() const;
 	bool ValidateClimbWall();
+	bool TryMantle();
+	bool isMantling = false;
+	
 
 	bool isSprinting = false;
 	bool isCrouching = false;
 	bool isGrounded = false;
 	bool isClimbing = false;
+	bool bInvertLookY = false;
 	FVector GroundNormal;
 	FVector2D RawMoveInput;
+	FVector MantleStartLocation;
+	FVector MantleTargetLocation;
+
+	float MantleTimer = 0.0f;
+	bool IsMantling = false;
+	float MantleTime = 0.0f;
+
+	FVector MantleStart;
+	FVector MantleTarget;
+	
+	UPROPERTY(EditAnywhere, Category = "Mantle")
+	float MantleDuration = 0.35f;
 
 	float CurrentSpeed = 0.0f;
 	UPROPERTY(EditAnywhere)
@@ -126,6 +145,16 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Climb")
 	float StaminaDrainRate = 1.0f;
 	FVector ClimbWallNormal;
+
+	UPROPERTY(EditAnywhere, Category = "Audio")
+	UFMODAudioComponent* FootstepAudioComponent;
+
+	UPROPERTY(EditAnywhere, Category = "Audio")
+	UFMODAudioComponent* MantleAudioComponent;
+
+	UPROPERTY(EditAnywhere, Category = "Audio")
+	UFMODEvent* FootstepLoopEvent;
+	UFMODEvent* MantleEvent;
 
 private:
 	UPROPERTY(EditAnywhere, Category = "Input")

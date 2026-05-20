@@ -34,6 +34,14 @@ AMovementPawn::AMovementPawn()
 	Camera->SetRelativeLocation(FVector(0, 0.0f, 64.0f));
 	Camera->bUsePawnControlRotation = true;
 
+	FootstepAudioComponent = CreateDefaultSubobject<UFMODAudioComponent>(TEXT("FootstepAudio"));
+	FootstepAudioComponent->SetupAttachment(RootComponent);
+	FootstepAudioComponent->bAutoActivate = false;
+
+	MantleAudioComponent = CreateDefaultSubobject<UFMODAudioComponent>(TEXT("MantleAudio"));
+	MantleAudioComponent->SetupAttachment(RootComponent);
+	MantleAudioComponent->bAutoActivate = false;
+
 	bUseControllerRotationYaw = true;
 	bUseControllerRotationPitch = true;
 	bUseControllerRotationRoll = false;
@@ -47,21 +55,14 @@ void AMovementPawn::BeginPlay()
 {
 	Super::BeginPlay();
 
-	if (GEngine)
-	{
-		GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Yellow, TEXT("Pawn BeginPlay"));
-	}
-
 	APlayerController* PC = Cast<APlayerController>(GetController());
 	if (!PC)
 	{
 		GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, TEXT("No PlayerController"));
 		return;
 	}
-
 	UEnhancedInputLocalPlayerSubsystem* Subsystem =
 		ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PC->GetLocalPlayer());
-
 	if (Subsystem && InputMappingContext)
 	{
 		Subsystem->AddMappingContext(InputMappingContext, 0);
@@ -71,6 +72,12 @@ void AMovementPawn::BeginPlay()
 	{
 		GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, TEXT("Missing IMC or Subsystem"));
 	}
+	if (FootstepAudioComponent && FootstepLoopEvent) {
+		FootstepAudioComponent->SetEvent(FootstepLoopEvent);
+	}
+	if (MantleAudioComponent && MantleEvent) {
+		MantleAudioComponent->SetEvent(MantleEvent);
+	}
 }
 
 
@@ -78,9 +85,29 @@ void AMovementPawn::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 	CheckGrounded();
+	if (IsMantling)
+	{
+		
+		MantleTime += DeltaTime;
+
+		float Alpha = FMath::Clamp(MantleTime / MantleDuration, 0.0f, 1.0f);
+
+		FVector NewLocation = FMath::Lerp(MantleStart, MantleTarget, Alpha);
+		SetActorLocation(NewLocation, false);
+
+		if (Alpha >= 1.0f)
+		{
+			IsMantling = false;
+		}
+
+		return;
+	}
 	if (isClimbing) {
 		if (!ValidateClimbWall())
 		{
+			if (TryMantle()) {
+				return;
+			}
 			isClimbing = false;
 			RefreshMovementState();
 			return;
@@ -118,12 +145,28 @@ void AMovementPawn::Tick(float DeltaTime)
 		Velocity.X = FMath::FInterpTo(Velocity.X, 0.0f, DeltaTime, GroundFriction);
 		Velocity.Y = FMath::FInterpTo(Velocity.Y, 0.0f, DeltaTime, GroundFriction);
 	}
-	
+	bool bShouldPlayFootsteps = isGrounded &&
+		!DesiredDirection.IsNearlyZero();
+
+	if (bShouldPlayFootsteps && FootstepAudioComponent) {
+		if (!FootstepAudioComponent->IsPlaying()) {
+			FootstepAudioComponent->Play();
+		}
+		float SpeedType = isCrouching ? 1.0f : isSprinting ? 3.0f : 2.0f;
+
+		FootstepAudioComponent->SetParameter(FName("Speed"), SpeedType);
+	}
+	else {
+		if (FootstepAudioComponent->IsPlaying()) {
+			FootstepAudioComponent->SetParameter(FName("Speed"), 0.0f);
+		}
+	}
+
 	float TargetHalfHeight = isCrouching ? CrouchCapsuleHalfHeight : StandingCapsuleHalfHeight;
 	float NewHalfHeight = FMath::FInterpTo(
-		CapsuleCollider->GetUnscaledCapsuleHalfHeight(), 
-		TargetHalfHeight, 
-		DeltaTime, 
+		CapsuleCollider->GetUnscaledCapsuleHalfHeight(),
+		TargetHalfHeight,
+		DeltaTime,
 		CrouchInterpSpeed);
 	CapsuleCollider->SetCapsuleHalfHeight(NewHalfHeight, true);
 
@@ -163,7 +206,7 @@ void AMovementPawn::SetupPlayerInputComponent(UInputComponent* PlayerInputCompon
 
 void AMovementPawn::StartSprinting()
 {
-	if(!isCrouching) {
+	if (!isCrouching) {
 		isSprinting = true;
 		RefreshMovementState();
 	}
@@ -195,7 +238,6 @@ bool AMovementPawn::CanStandUp() const {
 	);
 }
 
-
 void AMovementPawn::StartCrouching()
 {
 	if (!isSprinting) {
@@ -215,7 +257,7 @@ void AMovementPawn::StopCrouching()
 }
 
 void AMovementPawn::RefreshMovementState() {
-	
+
 	if (isCrouching) {
 		MaxSpeed = CrouchSpeed;
 	}
@@ -261,7 +303,7 @@ void AMovementPawn::MoveWithCollisions(const FVector& DesiredMovement)
 		if (RemainingMovement.IsNearlyZero()) {
 			break;
 		}
-		
+
 		FVector Start = GetActorLocation();
 		FVector End = Start + RemainingMovement;
 
@@ -272,7 +314,7 @@ void AMovementPawn::MoveWithCollisions(const FVector& DesiredMovement)
 		FCollisionShape CapsuleShape = FCollisionShape::MakeCapsule(CapsuleRadius, CapsuleHalfHeight);
 
 		FCollisionShape CapsuleShape2D = FCollisionShape::MakeCapsule(
-			CapsuleRadius, 
+			CapsuleRadius,
 			CapsuleHalfHeight
 		);
 		FCollisionQueryParams Params;
@@ -375,7 +417,7 @@ bool AMovementPawn::ValidateClimbWall()
 	if (!Camera) return false;
 
 	FVector Start = Camera->GetComponentLocation();
-	FVector Forward = Camera->GetForwardVector();
+	FVector Forward = GetActorForwardVector();
 	FVector End = Start + (Forward * InteractableCheckDistance);
 
 	FHitResult Hit;
@@ -398,7 +440,7 @@ bool AMovementPawn::ValidateClimbWall()
 	{
 		return false;
 	}
-	
+
 	float VerticalDot = FVector::DotProduct(Hit.ImpactNormal, FVector::UpVector);
 
 	// Reject ground/ceiling-like surfaces
@@ -433,7 +475,7 @@ void AMovementPawn::Jump()
 }
 
 void AMovementPawn::StopJumping()
-{ 
+{
 	//Currently does nothing, but could be used to implement variable jump height by reducing the upward velocity when the jump button is released
 }
 
@@ -471,4 +513,59 @@ void AMovementPawn::RestoreStamina() {
 		CurrentStamina += StaminaDrainRate * GetWorld()->GetDeltaSeconds();
 		CurrentStamina = FMath::Min(CurrentStamina, MaxStamina);
 	}
+}
+
+bool AMovementPawn::TryMantle()
+{
+	FVector Forward = GetActorForwardVector();
+	Forward.Z = 0.0f;
+	Forward.Normalize();
+
+	FVector Start =
+		GetActorLocation()
+		+ FVector(0, 0, CapsuleCollider->GetScaledCapsuleHalfHeight() + 40.0f)
+		+ Forward * 50.0f;
+
+	FVector End = Start - FVector(0, 0, 120.0f);
+
+	FHitResult Hit;
+	FCollisionQueryParams Params;
+	Params.AddIgnoredActor(this);
+
+	bool bHit = GetWorld()->LineTraceSingleByChannel(
+		Hit,
+		Start,
+		End,
+		ECC_Visibility,
+		Params
+	);
+
+	if (!bHit)
+	{
+		return false;
+	}
+
+	float FloorDot = FVector::DotProduct(Hit.ImpactNormal, FVector::UpVector);
+
+	if (FloorDot < 0.7f)
+	{
+		return false;
+	}
+
+	FVector TargetLocation =
+		Hit.ImpactPoint
+		+ FVector(0, 0, CapsuleCollider->GetScaledCapsuleHalfHeight() + 2.0f);
+
+	IsMantling = true;
+	MantleTime = 0.0f;
+	if (MantleAudioComponent && MantleEvent) {
+		MantleAudioComponent->Play();
+	}	
+	MantleStart = GetActorLocation();
+	MantleTarget = TargetLocation;
+
+	isClimbing = false;
+	Velocity = FVector::ZeroVector;
+
+	return true;
 }
