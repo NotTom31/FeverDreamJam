@@ -42,6 +42,22 @@ AMovementPawn::AMovementPawn()
 	MantleAudioComponent->SetupAttachment(RootComponent);
 	MantleAudioComponent->bAutoActivate = false;
 
+	JumpAudioComponent = CreateDefaultSubobject<UFMODAudioComponent>(TEXT("JumpAudio"));
+	JumpAudioComponent->SetupAttachment(RootComponent);
+	JumpAudioComponent->bAutoActivate = false;
+
+	CrouchAudioComponent = CreateDefaultSubobject<UFMODAudioComponent>(TEXT("CrouchAudio"));
+	CrouchAudioComponent->SetupAttachment(RootComponent);
+	CrouchAudioComponent->bAutoActivate = false;
+
+	ClimbingLoopComponent = CreateDefaultSubobject<UFMODAudioComponent>(TEXT("ClimbingLoop"));
+	ClimbingLoopComponent->SetupAttachment(RootComponent);
+	ClimbingLoopComponent->bAutoActivate = false;
+
+	LandingAudioComponent = CreateDefaultSubobject<UFMODAudioComponent>(TEXT("LandingAudio"));
+	LandingAudioComponent->SetupAttachment(RootComponent);
+	LandingAudioComponent->bAutoActivate = false;
+
 	bUseControllerRotationYaw = true;
 	bUseControllerRotationPitch = true;
 	bUseControllerRotationRoll = false;
@@ -84,7 +100,16 @@ void AMovementPawn::BeginPlay()
 void AMovementPawn::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+	wasGrounded = isGrounded;
 	CheckGrounded();
+	if (!wasGrounded && isGrounded)
+	{
+		if (LandingAudioComponent && LandingEvent)
+		{
+			LandingAudioComponent->SetEvent(LandingEvent);
+			LandingAudioComponent->Play();
+		}
+	}
 	if (IsMantling)
 	{
 		
@@ -109,12 +134,20 @@ void AMovementPawn::Tick(float DeltaTime)
 				return;
 			}
 			isClimbing = false;
+			if (ClimbingLoopComponent->IsPlaying())
+			{
+				ClimbingLoopComponent->Stop();
+			}
 			RefreshMovementState();
 			return;
 		}
 		CurrentStamina -= StaminaDrainRate * DeltaTime;
 		if (CurrentStamina <= 0.0f) {
 			isClimbing = false;
+			if (ClimbingLoopComponent->IsPlaying())
+			{
+				ClimbingLoopComponent->Stop();
+			}
 			RefreshMovementState();
 			return;
 		}
@@ -242,6 +275,8 @@ void AMovementPawn::StartCrouching()
 {
 	if (!isSprinting) {
 		isCrouching = true;
+		CrouchAudioComponent->SetEvent(CrouchEvent);
+		CrouchAudioComponent->Play();
 		RefreshMovementState();
 	}
 }
@@ -251,7 +286,8 @@ void AMovementPawn::StopCrouching()
 	if (!CanStandUp()) {
 		return;
 	}
-
+	CrouchAudioComponent->SetEvent(CrouchEvent);
+	CrouchAudioComponent->Play();
 	isCrouching = false;
 	RefreshMovementState();
 }
@@ -409,6 +445,13 @@ void AMovementPawn::CheckInteractable()
 		isClimbing = true;
 		Velocity = FVector::ZeroVector; // stop all movement when starting to climb
 		ClimbWallNormal = Hit.ImpactNormal;
+		if (ClimbingLoopComponent && ClimbingLoopEvent) {
+			ClimbingLoopComponent->SetEvent(ClimbingLoopEvent);
+			if (!ClimbingLoopComponent->IsPlaying()) {
+				ClimbingLoopComponent->Play();
+			}
+			
+		}
 	}
 }
 
@@ -471,6 +514,8 @@ void AMovementPawn::Jump()
 	if (isGrounded) {
 		Velocity.Z = JumpStrength;
 		isGrounded = false;
+		JumpAudioComponent->SetEvent(JumpEvent);
+		JumpAudioComponent->Play();
 	}
 }
 
@@ -489,6 +534,10 @@ void AMovementPawn::StopInteract()
 {
 	isClimbing = false;
 	ClimbWallNormal = FVector::ZeroVector;
+	if (ClimbingLoopComponent->IsPlaying())
+	{
+		ClimbingLoopComponent->Stop();
+	}
 }
 
 void AMovementPawn::SnapToGround()
@@ -558,13 +607,17 @@ bool AMovementPawn::TryMantle()
 
 	IsMantling = true;
 	MantleTime = 0.0f;
-	if (MantleAudioComponent && MantleEvent) {
-		MantleAudioComponent->Play();
-	}	
+	MantleAudioComponent->SetEvent(MantleEvent);
+	MantleAudioComponent->Play();
+
 	MantleStart = GetActorLocation();
 	MantleTarget = TargetLocation;
 
 	isClimbing = false;
+	if (ClimbingLoopComponent->IsPlaying())
+	{
+		ClimbingLoopComponent->Stop();
+	}
 	Velocity = FVector::ZeroVector;
 
 	return true;
