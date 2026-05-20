@@ -60,6 +60,7 @@ public:
 	bool isSprinting = false;
 	bool isCrouching = false;
 	bool isGrounded = false;
+	bool wasGrounded = false;
 	bool isClimbing = false;
 	bool bInvertLookY = false;
 	FVector GroundNormal;
@@ -160,6 +161,11 @@ public:
 
 	UPROPERTY(EditAnywhere, Category = "Audio")
 	UFMODAudioComponent* ClimbingLoopComponent;
+	UPROPERTY(EditAnywhere, Category = "Audio")
+	UFMODAudioComponent* LandingAudioComponent;
+
+	UPROPERTY(EditAnywhere, Category = "Audio")
+	UFMODEvent* LandingEvent;
 
 	UPROPERTY(EditAnywhere, Category = "Audio")
 	UFMODEvent* MantleEvent;
