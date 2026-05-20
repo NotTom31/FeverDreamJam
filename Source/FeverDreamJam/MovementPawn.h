@@ -153,8 +153,10 @@ public:
 	UFMODAudioComponent* MantleAudioComponent;
 
 	UPROPERTY(EditAnywhere, Category = "Audio")
-	UFMODEvent* FootstepLoopEvent;
 	UFMODEvent* MantleEvent;
+
+	UPROPERTY(EditAnywhere, Category = "Audio")
+	UFMODEvent* FootstepLoopEvent;
 
 private:
 	UPROPERTY(EditAnywhere, Category = "Input")

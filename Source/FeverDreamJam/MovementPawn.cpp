@@ -558,9 +558,9 @@ bool AMovementPawn::TryMantle()
 
 	IsMantling = true;
 	MantleTime = 0.0f;
-	if (MantleAudioComponent && MantleEvent) {
-		MantleAudioComponent->Play();
-	}	
+	MantleAudioComponent->SetEvent(MantleEvent);
+	MantleAudioComponent->Play();
+
 	MantleStart = GetActorLocation();
 	MantleTarget = TargetLocation;
 
