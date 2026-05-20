@@ -68,7 +68,12 @@ public:
 	FVector MantleTargetLocation;
 
 	float MantleTimer = 0.0f;
+	bool IsMantling = false;
+	float MantleTime = 0.0f;
 
+	FVector MantleStart;
+	FVector MantleTarget;
+	
 	UPROPERTY(EditAnywhere, Category = "Mantle")
 	float MantleDuration = 0.35f;
 

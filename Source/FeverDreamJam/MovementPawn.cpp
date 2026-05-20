@@ -78,6 +78,22 @@ void AMovementPawn::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 	CheckGrounded();
+	if (IsMantling)
+	{
+		MantleTime += DeltaTime;
+
+		float Alpha = FMath::Clamp(MantleTime / MantleDuration, 0.0f, 1.0f);
+
+		FVector NewLocation = FMath::Lerp(MantleStart, MantleTarget, Alpha);
+		SetActorLocation(NewLocation, false);
+
+		if (Alpha >= 1.0f)
+		{
+			IsMantling = false;
+		}
+
+		return;
+	}
 	if (isClimbing) {
 		if (!ValidateClimbWall())
 		{
@@ -393,7 +409,7 @@ bool AMovementPawn::ValidateClimbWall()
 	if (!Camera) return false;
 
 	FVector Start = Camera->GetComponentLocation();
-	FVector Forward = Camera->GetForwardVector();
+	FVector Forward = GetActorForwardVector();
 	FVector End = Start + (Forward * InteractableCheckDistance);
 
 	FHitResult Hit;
@@ -493,7 +509,7 @@ void AMovementPawn::RestoreStamina() {
 
 bool AMovementPawn::TryMantle()
 {
-	FVector Forward = Camera->GetForwardVector();
+	FVector Forward = GetActorForwardVector();
 	Forward.Z = 0.0f;
 	Forward.Normalize();
 
@@ -532,7 +548,11 @@ bool AMovementPawn::TryMantle()
 		Hit.ImpactPoint
 		+ FVector(0, 0, CapsuleCollider->GetScaledCapsuleHalfHeight() + 2.0f);
 
-	SetActorLocation(TargetLocation, false);
+	IsMantling = true;
+	MantleTime = 0.0f;
+
+	MantleStart = GetActorLocation();
+	MantleTarget = TargetLocation;
 
 	isClimbing = false;
 	Velocity = FVector::ZeroVector;
