@@ -78,7 +78,36 @@ void AMovementPawn::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 	CheckGrounded();
+	if (isMantling)
+	{
+		MantleTimer += DeltaTime;
+
+		float Alpha = MantleTimer / MantleDuration;
+		Alpha = FMath::Clamp(Alpha, 0.0f, 1.0f);
+
+		// Smooth step easing
+		float SmoothAlpha = FMath::SmoothStep(0.0f, 1.0f, Alpha);
+
+		FVector NewLocation = FMath::Lerp(
+			MantleStartLocation,
+			MantleTargetLocation,
+			SmoothAlpha
+		);
+
+		SetActorLocation(NewLocation, false);
+
+		if (Alpha >= 1.0f)
+		{
+			isMantling = false;
+			isGrounded = true;
+		}
+
+		return;
+	}
 	if (isClimbing) {
+		if (RawMoveInput.Y > 0.5f && TryMantle()) {
+			return;
+		}
 		if (!ValidateClimbWall())
 		{
 			isClimbing = false;
@@ -131,7 +160,7 @@ void AMovementPawn::Tick(float DeltaTime)
 	}
 	else {
 		if (FootstepAudioComponent->IsPlaying()) {
-			FootstepAudioComponent->Stop();
+			FootstepAudioComponent->SetParameter(FName("Speed"), 0.0f);
 		}
 	}
 
@@ -486,4 +515,55 @@ void AMovementPawn::RestoreStamina() {
 		CurrentStamina += StaminaDrainRate * GetWorld()->GetDeltaSeconds();
 		CurrentStamina = FMath::Min(CurrentStamina, MaxStamina);
 	}
+}
+
+bool AMovementPawn::TryMantle()
+{
+	FVector Forward = Camera->GetForwardVector();
+	Forward.Z = 0.0f;
+	Forward.Normalize();
+
+	FVector Start =
+		GetActorLocation()
+		+ FVector(0, 0, CapsuleCollider->GetScaledCapsuleHalfHeight() * 0.5f)
+		+ Forward * 20.0f;
+
+	FVector End = Start - FVector(0, 0, 200.0f);
+
+	FHitResult Hit;
+	FCollisionQueryParams Params;
+	Params.AddIgnoredActor(this);
+	DrawDebugLine(GetWorld(), Start, End, FColor::Blue, false, 1.0f, 0, 3.0f);
+	bool bHit = GetWorld()->LineTraceSingleByChannel(
+		Hit,
+		Start,
+		End,
+		ECC_Visibility,
+		Params
+	);
+
+	if (!bHit)
+	{
+		return false;
+	}
+
+	float FloorDot = FVector::DotProduct(Hit.ImpactNormal, FVector::UpVector);
+
+	if (FloorDot < 0.7f)
+	{
+		return false;
+	}
+
+	FVector TargetLocation =
+		Hit.ImpactPoint
+		+ FVector(0, 0, CapsuleCollider->GetScaledCapsuleHalfHeight() + 2.0f);
+	DrawDebugSphere(GetWorld(), Hit.ImpactPoint, 12.0f, 12, FColor::Green, false, 2.0f);
+	MantleStartLocation = GetActorLocation();
+	MantleTargetLocation = TargetLocation;
+	MantleTimer = 0.0f;
+	isMantling = true;
+	isClimbing = false;
+	Velocity = FVector::ZeroVector;
+
+	return true;
 }

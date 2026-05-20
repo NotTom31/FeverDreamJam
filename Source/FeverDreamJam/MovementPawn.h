@@ -53,6 +53,9 @@ public:
 	void RestoreStamina();
 	bool CanStandUp() const;
 	bool ValidateClimbWall();
+	bool TryMantle();
+	bool isMantling = false;
+	
 
 	bool isSprinting = false;
 	bool isCrouching = false;
@@ -61,6 +64,13 @@ public:
 	bool bInvertLookY = false;
 	FVector GroundNormal;
 	FVector2D RawMoveInput;
+	FVector MantleStartLocation;
+	FVector MantleTargetLocation;
+
+	float MantleTimer = 0.0f;
+
+	UPROPERTY(EditAnywhere, Category = "Mantle")
+	float MantleDuration = 0.35f;
 
 	float CurrentSpeed = 0.0f;
 	UPROPERTY(EditAnywhere)
